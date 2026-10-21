@@ -26,14 +26,18 @@ class NativeUiTest {
     private val context = instrumentation.targetContext
     private val device = UiDevice.getInstance(instrumentation)
 
-    private fun waitText(value: String): androidx.test.uiautomator.UiObject2 {
-        val matcher =
+    private fun waitText(
+        value: String,
+        enabled: Boolean = false,
+    ): androidx.test.uiautomator.UiObject2 {
+        var matcher =
             By.text(
                 Pattern.compile(
                     Pattern.quote(value),
                     Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE,
                 )
             )
+        if (enabled) matcher = matcher.enabled(true)
         val deadline = android.os.SystemClock.uptimeMillis() + 30000
         while (android.os.SystemClock.uptimeMillis() < deadline) {
             // AOSP Quickstep can show an unrelated ANR during headless emulator boot.
@@ -106,8 +110,7 @@ class NativeUiTest {
             }
         ActivityScenario.launch<NativeActivity>(intent).use { scenario ->
             for (i in 1..2) {
-                val accept = waitText("Video übernehmen")
-                assertTrue(accept.wait(Until.enabled(true), 30000))
+                val accept = waitText("Video übernehmen", enabled = true)
                 accept.click()
                 device.waitForIdle()
             }
