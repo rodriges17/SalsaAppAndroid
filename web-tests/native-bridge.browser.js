@@ -1,0 +1,64 @@
+import {test, before, after} from 'node:test';
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+const {chromium}=process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES?require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES+'/playwright'):require('playwright');
+const assets=new URL('../app/src/main/assets/',import.meta.url);
+let browser,server,origin;
+before(async()=>{
+ server=createServer(async(req,res)=>{try{const path=decodeURI(req.url.split('?')[0]);const file=path==='/fixture.mp4'?new URL('./fixtures/video.mp4',import.meta.url):new URL('.'+path,assets);const data=await readFile(file);const type=path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':path.endsWith('.mp4')?'video/mp4':path.endsWith('.png')?'image/png':'text/html';res.writeHead(200,{'Content-Type':type});res.end(data);}catch{res.writeHead(404);res.end();}}).listen(0,'127.0.0.1');
+ await new Promise(r=>server.once('listening',r));origin=`http://127.0.0.1:${server.address().port}`;
+ browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE,headless:true,args:['--no-sandbox']});
+});
+after(async()=>{await browser?.close();await new Promise(r=>server?.close(r));});
+async function setup(){const context=await browser.newContext();const page=await context.newPage();await page.addInitScript(()=>{
+ window.nativeReady=false;window.replies=new Map();window.NativeUI={ready(){window.nativeReady=true;},result(id,json){const reply=window.replies.get(id);if(reply){window.replies.delete(id);reply(JSON.parse(json));}},progress(){},home(){}};
+ window.NativeMedia={data:new Map(),begin(){const t=crypto.randomUUID();this.data.set(t,[]);return t;},chunk(t,b){this.data.get(t).push(b);return true;},finish(){return true;},abort(t){this.data.delete(t);}};
+ window.AndroidPlatform={rotate(){},keepAwake(){},fullscreen(){}};
+ window.AndroidDownloads={parts:[],start(name){this.name=name;this.parts=[];return true;},chunk(b){this.parts.push(b);return true;},finish(type){this.type=type;return true;},abort(){}};
+ const fs=JSON.parse(localStorage.getItem('mock-native-fs')||'{"files":{},"dirs":[""]}');
+ const save=()=>localStorage.setItem('mock-native-fs',JSON.stringify(fs));
+ const decode=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));const encode=b=>{let s='';for(const c of b)s+=String.fromCharCode(c);return btoa(s);};
+ const writers=new Map();
+ window.AndroidFiles={pick(){setTimeout(()=>window.AndroidFSResult({root:'grant',path:'',name:'Android documents',kind:'directory'}));},call(raw){const a=JSON.parse(raw);let value;try{switch(a.op){case'permission':value='granted';break;case'child':{const path=[a.path,a.name].filter(Boolean).join('/');if(a.directory){if(!fs.dirs.includes(path)){if(!a.create)throw Error('NotFoundError');fs.dirs.push(path);}}else if(!(path in fs.files)){if(!a.create)throw Error('NotFoundError');fs.files[path]={data:'',time:1};}save();value={root:a.root,path,name:a.name,kind:a.directory?'directory':'file'};break;}case'list':value=[...fs.dirs,...Object.keys(fs.files)].filter(p=>p!==a.path&&p.startsWith(a.path?a.path+'/':'')&&!p.slice(a.path?a.path.length+1:0).includes('/')).map(p=>p.split('/').at(-1));break;case'stat':{const f=fs.files[a.path];if(!f)throw Error('NotFoundError');value={size:decode(f.data).length,lastModified:f.time,name:a.path.split('/').at(-1),url:'https://appassets.androidplatform.net/mock/'+encodeURIComponent(a.path)};break;}case'begin':value=crypto.randomUUID();writers.set(value,{path:a.path,parts:[]});break;case'write':writers.get(a.token).parts.push(decode(a.data));value=true;break;case'close':{const w=writers.get(a.token);const size=w.parts.reduce((s,p)=>s+p.length,0);const out=new Uint8Array(size);let p=0;w.parts.forEach(b=>{out.set(b,p);p+=b.length;});fs.files[w.path]={data:encode(out),time:Date.now()};save();writers.delete(a.token);value=true;break;}case'abort':writers.delete(a.token);value=true;break;case'remove':{const path=[a.path,a.name].filter(Boolean).join('/');if(!fs.files[path])throw Error('NotFoundError');delete fs.files[path];save();value=true;break;}default:throw Error('Unknown operation');}return JSON.stringify({value});}catch(e){return JSON.stringify({error:e.message,name:e.message==='NotFoundError'?'NotFoundError':'InvalidStateError'});}}};
+ const fetchOriginal=window.fetch.bind(window);window.fetch=async(input,options)=>{const u=String(input);if(u.startsWith('https://appassets.androidplatform.net/mock/')){const f=fs.files[decodeURIComponent(u.split('/mock/')[1])];return new Response(f?decode(f.data):null,{status:f?200:404,headers:{'Content-Type':'application/octet-stream'}});}return fetchOriginal(input,options);};
+ });await page.goto(origin+'/index.html');await page.waitForFunction(()=>window.nativeReady);return{context,page};}
+async function rpc(page,op,args={}){const reply=await page.evaluate(({op,args})=>new Promise(resolve=>{const id=Math.floor(Math.random()*1e9);window.replies.set(id,resolve);NativeModel.request(id,op,args);}),{op,args});if(reply.error)throw Error(reply.error);return reply.value;}
+async function add(page,session,name='Turn'){return rpc(page,'add',{token:session.token,url:origin+'/fixture.mp4',name,type:'video/mp4',duration:1,width:160,height:240});}
+async function create(page,title='Drehung'){const d=await rpc(page,'edit');const videos=await add(page,d);return rpc(page,'save',{token:d.token,title,description:'Schritte und Zählzeit',status:'Am Üben',tags:['Drehung'],videos});}
+
+test('native repository shares existing PWA figures, preserves edits and checks original media bytes',async()=>{const{page,context}=await setup();try{
+ const old=await page.evaluate(async()=>{const s=await import('./storage.js');const blob=await(await fetch('/fixture.mp4')).blob();const f=await s.saveFigure({id:crypto.randomUUID(),title:'PWA Bestand',description:'',status:'Sitzt',tags:['Bestand']},[{id:crypto.randomUUID(),blob,name:'Original',duration:1,confirmed:true}]);return f.id;});
+ assert.equal((await rpc(page,'list'))[0].id,old);
+ const d=await rpc(page,'edit',{id:old});let videos=await add(page,d,'zweites');videos=await add(page,d,'drittes');
+ const retain=[{...videos[2],name:'Erstes umbenannt'},videos[0]];
+ videos=await rpc(page,'add',{token:d.token,url:origin+'/fixture.mp4',name:'viertes',type:'video/mp4',duration:1,keep:retain});
+ assert.deepEqual(videos.map(v=>v.name),['Erstes umbenannt','Original','viertes']);
+ const f=await rpc(page,'save',{token:d.token,title:'Turn',description:'Zählzeit',status:'Sitzt',tags:['Anfänger'],videos});
+ assert.equal((await rpc(page,'list',{query:'zählzeit',tag:'Anfänger',status:'Sitzt'})).length,1);
+ const media=await rpc(page,'media',{id:f.id,video:f.videoIds[0]});const bytes=await page.evaluate(t=>NativeMedia.data.get(t).map(b=>Array.from(atob(b),c=>c.charCodeAt(0))).flat(),media.token);assert.deepEqual(Buffer.from(bytes),await readFile(new URL('./fixtures/video.mp4',import.meta.url)));
+ await page.reload();await page.waitForFunction(()=>window.nativeReady);assert.equal((await rpc(page,'list'))[0].videoIds.length,3);
+ }finally{await context.close();}});
+
+test('native ZIP import requires confirmation and full backup restores learning status with explicit plan',async()=>{const{page,context}=await setup();try{
+ const f=await create(page);await rpc(page,'packageExport',{id:f.id,videos:f.videoIds});
+ const zip=await page.evaluate(()=>{const bytes=AndroidDownloads.parts.flatMap(b=>Array.from(atob(b),c=>c.charCodeAt(0)));return URL.createObjectURL(new Blob([Uint8Array.from(bytes)],{type:'application/zip'}));});
+ const draft=await rpc(page,'packageImport',{url:zip});assert.equal(draft.figure.status,'Neu');assert.equal(draft.videos[0].confirmed,false);
+ await assert.rejects(()=>rpc(page,'save',{token:draft.token,title:'Kopie',description:'',status:'Neu',tags:[],videos:draft.videos}),/bestätigen/);
+ const checked=await rpc(page,'confirm',{token:draft.token,video:draft.videos[0].id,duration:1,width:160,height:240});await rpc(page,'save',{token:draft.token,title:'Kopie',description:'',status:'Neu',tags:[],videos:checked});assert.equal((await rpc(page,'packageImport',{url:zip})).duplicate,true);
+ let backup=await rpc(page,'backup',{action:'startCreate'});assert.equal(backup.view,'create-ready');backup=await rpc(page,'backup',{action:'create'});assert.equal(backup.view,'created');
+ const parts=[];for(let i=0;i<backup.data.parts.length;i++){await rpc(page,'backup',{action:'download',index:i});parts.push(await page.evaluate(()=>{const bytes=AndroidDownloads.parts.flatMap(b=>Array.from(atob(b),c=>c.charCodeAt(0)));return{name:AndroidDownloads.name,url:URL.createObjectURL(new Blob([Uint8Array.from(bytes)]))};}));}
+ for(const local of await rpc(page,'list'))await rpc(page,'delete',{id:local.id});
+ await rpc(page,'backup',{action:'startRestore'});await rpc(page,'backup',{action:'files',files:parts});backup=await rpc(page,'backup',{action:'checkRestore'});assert.equal(backup.view,'restore-plan');assert.equal((await rpc(page,'list')).length,0);
+ await rpc(page,'backup',{action:'restore'});const restored=await rpc(page,'list');assert.equal(restored.length,2);assert.equal(restored.find(f=>f.title==='Drehung').status,'Am Üben');
+ }finally{await context.close();}});
+
+test('Android document handles survive IndexedDB reload and transfer keeps the original until explicit deletion',async()=>{const{page,context}=await setup();try{
+ const f=await create(page);const settings=await rpc(page,'folder',{action:'choose'});const folder=settings.activeFolder;assert.ok(folder);
+ const copy=await rpc(page,'transfer',{id:f.id,target:folder});assert.equal(copy.storageFolder,folder);assert.equal((await rpc(page,'list')).length,2);
+ await page.reload();await page.waitForFunction(()=>window.nativeReady);const all=await rpc(page,'list');assert.equal(all.length,2);assert.ok(!all.find(f=>f.storageFolder)?.storageProblem);
+ const original=await rpc(page,'transfer',{id:copy.id,storageFolder:folder,target:null});assert.ok(original.id!==f.id);assert.equal((await rpc(page,'list')).length,3);
+ await rpc(page,'delete',{id:copy.id,storageFolder:folder});assert.equal((await rpc(page,'list')).length,2);
+ }finally{await context.close();}});

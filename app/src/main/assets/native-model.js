@@ -6,7 +6,7 @@ const bytes64=bytes=>{let s='';for(const b of bytes)s+=String.fromCharCode(b);re
 const poster=async blob=>blob?bytes64(new Uint8Array(await blob.arrayBuffer())):null;
 const clean=async f=>({...f,poster:await poster(f.poster),posterBytes:undefined});
 const summary=records=>records.map(v=>({id:v.id,name:v.name,duration:v.duration,confirmed:!!v.confirmed,missing:!!v.missing,problem:v.problem??'',size:v.blob?.size??0}));
-const figure=async key=>{const all=await storage.listFigures();const f=all.find(f=>f.id===key.id&&(f.storageFolder??null)===(key.storageFolder??null));if(!f)throw new Error('Figur nicht mehr vorhanden');return f;};
+const figure=async key=>{const all=await storage.listFigures();const f=all.find(f=>f.id===key.id&&(f.storageFolder??null)===(key.storageFolder??null));if(!f)throw new Error('Figur nicht mehr vorhanden');if(key.revision&&key.revision!==f.revision)throw new Error('Diese Figur wurde inzwischen geändert. Bitte neu laden.');return f;};
 async function stream(blob) {
   const token=NativeMedia.begin(); if(!token)throw new Error('Nicht genügend Speicher');
   try {for(let p=0;p<blob.size;p+=49152)if(!NativeMedia.chunk(token,bytes64(new Uint8Array(await blob.slice(p,p+49152).arrayBuffer()))))throw new Error('Videokopie fehlgeschlagen');

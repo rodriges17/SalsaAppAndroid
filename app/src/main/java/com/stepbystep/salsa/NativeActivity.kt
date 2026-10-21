@@ -60,6 +60,9 @@ class NativeActivity : WebAppActivity() {
     private var previewView: VideoView? = null
     private var importedIntent: Intent? = null
     private var player: NativePlayer? = null
+    private var playerContent: LinearLayout? = null
+    private var playerStage: FrameLayout? = null
+    private var playerTools: ScrollView? = null
     private var generation = 0
     private var activeMedia: String? = null
     private lateinit var workflows: NativeWorkflows
@@ -117,7 +120,7 @@ class NativeActivity : WebAppActivity() {
         importedIntent=intent
         val fallback=button("Standardansicht öffnen") {showWeb("overview")};loading.addView(fallback)
     }
-    private fun key(f: JSONObject)=JSONObject().put("id",f.getString("id")).put("storageFolder",f.opt("storageFolder")?:JSONObject.NULL)
+    private fun key(f: JSONObject)=JSONObject().put("id",f.getString("id")).put("storageFolder",f.opt("storageFolder")?:JSONObject.NULL).put("revision",f.opt("revision")?:JSONObject.NULL)
     private fun bootLibrary() {
         val legacy=getSharedPreferences("MainActivity",MODE_PRIVATE).getString("figures","[]")?:"[]"
         val migration=getSharedPreferences("native-migration",MODE_PRIVATE)
@@ -191,7 +194,7 @@ class NativeActivity : WebAppActivity() {
         videos.forEachIndexed { index,v ->
             val box=column();box.setPadding(0,dp(4),0,dp(10));val name=field(box,"Video ${index+1}",v.optString("name"));name.addTextChangedListener(object:TextWatcher{override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){};override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){v.put("name",s.toString());dirty=true};override fun afterTextChanged(s:Editable?){} })
             if(v.optBoolean("missing"))box.addView(text(v.optString("problem")))
-            box.addView(text(if(v.optBoolean("confirmed"))"Bestätigt ✓"else"Vorschau und Bestätigung erforderlich",13f))
+            box.addView(text(if(v.optBoolean("confirmed"))"Bestätigt ✓" else "Vorschau und Bestätigung erforderlich",13f))
             val tools=row();tools.addView(button("▶"){captureForm();previewStored(v)},LinearLayout.LayoutParams(0,-2,1f));tools.addView(button("↑"){captureForm();if(index>0){videos.removeAt(index);videos.add(index-1,v);dirty=true;renderEditor()}},LinearLayout.LayoutParams(0,-2,1f));tools.addView(button("↓"){captureForm();if(index<videos.lastIndex){videos.removeAt(index);videos.add(index+1,v);dirty=true;renderEditor()}},LinearLayout.LayoutParams(0,-2,1f));box.addView(tools)
             val edits=row();edits.addView(button("Ersetzen"){captureForm();pickVideos(v.getString("id"))},LinearLayout.LayoutParams(0,-2,1f));edits.addView(button("Entfernen"){captureForm();if(videos.size>1){videos.remove(v);dirty=true;renderEditor()}else notice("Mindestens ein Video muss erhalten bleiben.")},LinearLayout.LayoutParams(0,-2,1f));box.addView(edits);page.addView(box)
         }
@@ -276,17 +279,26 @@ class NativeActivity : WebAppActivity() {
         busy=true;rpc("videos",key(f)){ data ->
             val records=(data as JSONArray).objects();if(records.isEmpty()){notice("Keine Videos vorhanden");return@rpc}
             screen="player";val page=column();val top=row();top.addView(button("‹"){startLibrary()});top.addView(text(f.optString("title"),19f,true),LinearLayout.LayoutParams(0,-2,1f));top.addView(button("↻"){player?.rotate()});page.addView(top)
-            val stage=FrameLayout(this).apply{setBackgroundColor(Color.BLACK)};page.addView(stage,LinearLayout.LayoutParams(-1,0,1f))
+            val stage=FrameLayout(this).apply{setBackgroundColor(Color.BLACK)};val content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL};playerContent=content;playerStage=stage;page.addView(content,LinearLayout.LayoutParams(-1,0,1f));content.addView(stage,LinearLayout.LayoutParams(-1,0,1f))
+            val tools=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL};val toolScroll=ScrollView(this).apply{addView(tools)};playerTools=toolScroll;content.addView(toolScroll,LinearLayout.LayoutParams(-1,dp(250)))
             val p=NativePlayer(this,stage);player=p;requestedOrientation=ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             var selected=-1
-            val choice=selector(records.map{it.optString("name").ifBlank{"Video"}},0){ i ->if(i!=selected){selected=i;loadMedia(f,records[i],p)}};page.addView(choice,1)
-            val time=text("Video wird geladen …",12f);page.addView(time);val seek=SeekBar(this).apply{max=1000};page.addView(seek);p.attachTimeline(seek,time)
-            val controls=row();controls.addView(button("−5 s"){p.rewind()},LinearLayout.LayoutParams(0,-2,1f));controls.addView(button("▶ / Ⅱ"){p.toggle()},LinearLayout.LayoutParams(0,-2,1f));controls.addView(button("Fit / Crop"){p.toggleCrop()},LinearLayout.LayoutParams(0,-2,1f));page.addView(controls)
-            val loops=row();val loop=button("Loop aus"){p.toggleLoop();(loops.getChildAt(0) as Button).text=if(p.loop)"Loop an" else "Loop aus"};loops.addView(loop,LinearLayout.LayoutParams(0,-2,1f));loops.addView(button("A"){p.markA();loop.text="Loop aus"},LinearLayout.LayoutParams(0,-2,1f));loops.addView(button("B"){p.markB();loop.text="Loop aus"},LinearLayout.LayoutParams(0,-2,1f));loops.addView(button("A–B ×"){p.clearAB()},LinearLayout.LayoutParams(0,-2,1f));page.addView(loops)
-            val bottom=row();bottom.addView(selector(listOf("0,25×","0,5×","0,75×","1×"),3){p.speed(listOf(.25f,.5f,.75f,1f)[it])},LinearLayout.LayoutParams(0,dp(48),1f));bottom.addView(button("Vollbild"){p.fullscreen()},LinearLayout.LayoutParams(0,-2,1f));page.addView(bottom)
-            show(page,false)
+            val choice=selector(records.map{it.optString("name").ifBlank{"Video"}},0){ i ->if(i!=selected){selected=i;loadMedia(f,records[i],p)}};tools.addView(choice)
+            val time=text("Video wird geladen …",12f);tools.addView(time);val seek=SeekBar(this).apply{max=1000};tools.addView(seek);p.attachTimeline(seek,time)
+            val controls=row();controls.addView(button("−5 s"){p.rewind()},LinearLayout.LayoutParams(0,-2,1f));controls.addView(button("▶ / Ⅱ"){p.toggle()},LinearLayout.LayoutParams(0,-2,1f));controls.addView(button("Fit / Crop"){p.toggleCrop()},LinearLayout.LayoutParams(0,-2,1f));tools.addView(controls)
+            val loops=row();val loop=button("Loop aus"){p.toggleLoop();(loops.getChildAt(0) as Button).text=if(p.loop)"Loop an" else "Loop aus"};loops.addView(loop,LinearLayout.LayoutParams(0,-2,1f));loops.addView(button("A"){p.markA();loop.text="Loop aus"},LinearLayout.LayoutParams(0,-2,1f));loops.addView(button("B"){p.markB();loop.text="Loop aus"},LinearLayout.LayoutParams(0,-2,1f));loops.addView(button("A–B ×"){p.clearAB()},LinearLayout.LayoutParams(0,-2,1f));tools.addView(loops)
+            val bottom=row();bottom.addView(selector(listOf("0,25×","0,5×","0,75×","1×"),3){p.speed(listOf(.25f,.5f,.75f,1f)[it])},LinearLayout.LayoutParams(0,dp(48),1f));bottom.addView(button("Vollbild"){p.fullscreen()},LinearLayout.LayoutParams(0,-2,1f));tools.addView(bottom)
+            adjustPlayerLayout();show(page,false)
         }
     }
+    private fun adjustPlayerLayout() {
+        val content=playerContent?:return;val stage=playerStage?:return;val tools=playerTools?:return
+        val landscape=resources.configuration.orientation==android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        content.orientation=if(landscape)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+        stage.layoutParams=if(landscape)LinearLayout.LayoutParams(0,-1,1f)else LinearLayout.LayoutParams(-1,0,1f)
+        tools.layoutParams=if(landscape)LinearLayout.LayoutParams(dp(270),-1)else LinearLayout.LayoutParams(-1,dp(250))
+    }
+    override fun onConfigurationChanged(config:android.content.res.Configuration){super.onConfigurationChanged(config);if(screen=="player")adjustPlayerLayout()}
     private fun loadMedia(f:JSONObject,v:JSONObject,p:NativePlayer) {
         val current=++generation;p.pause();p.clearAB();val args=key(f).put("video",v.getString("id"));rpc("media",args){ data ->val token=(data as JSONObject).getString("token");if(player!==p||generation!=current){nativeMedia.abort(token);return@rpc};activeMedia?.let(nativeMedia::abort);activeMedia=token;p.load(nativeMedia.file(token))}
     }
