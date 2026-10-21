@@ -234,6 +234,20 @@ class NativeWorkflows(
 
     private fun mb(value: Long) = "%.1f MB".format(value / 1000000.0)
 
+    fun openLibrary(id: String) {
+        source = null
+        call("cloudState") { value ->
+            state = value as JSONObject
+            library(id)
+        }
+    }
+
+    fun receiveBackup(files: JSONArray) {
+        call("backup", JSONObject().put("action", "startRestore")) {
+            backupAction("files", JSONObject().put("files", files))
+        }
+    }
+
     fun open(action: String, f: JSONObject? = null) {
         source = f
         when (action) {
@@ -261,14 +275,20 @@ class NativeWorkflows(
                 JSONObject().put("url", files.getJSONObject(0).getString("url")),
             ) { value ->
                 val data = value as JSONObject
-                if (data.optBoolean("duplicate"))
-                    confirm(
-                        "Paket bereits vorhanden",
-                        "Eine zusätzliche Kopie dieser Figur anlegen?",
-                    ) {
-                        imported(data)
+                if (data.optBoolean("duplicate")) {
+                    val discard = {
+                        request("drop", JSONObject().put("token", data.getString("token"))) {
+                            home()
+                        }
                     }
-                else imported(data)
+                    AlertDialog.Builder(activity)
+                        .setTitle("Paket bereits vorhanden")
+                        .setMessage("Eine zusätzliche Kopie dieser Figur anlegen?")
+                        .setNegativeButton("Abbrechen") { _, _ -> discard() }
+                        .setPositiveButton("Kopie anlegen") { _, _ -> imported(data) }
+                        .setOnCancelListener { discard() }
+                        .show()
+                } else imported(data)
             }
         else backupAction("files", JSONObject().put("files", files))
     }

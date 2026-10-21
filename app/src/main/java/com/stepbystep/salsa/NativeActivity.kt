@@ -188,6 +188,7 @@ class NativeActivity : WebAppActivity() {
                 if (::workflows.isInitialized) workflows.failed()
                 preview?.getButton(AlertDialog.BUTTON_POSITIVE)?.isEnabled = true
                 notice(result.getString("error"))
+                if (screen == "loading") startLibrary()
             } else done(result.opt("value"))
         }
         web.evaluateJavascript("NativeModel.request($id,${JSONObject.quote(op)},$args)", null)
@@ -1363,7 +1364,18 @@ class NativeActivity : WebAppActivity() {
             (incoming.action == Intent.ACTION_SEND && incoming.type == "text/plain") ||
                 (incoming.action == Intent.ACTION_VIEW && incoming.data?.scheme == "https")
         ) {
-            showWorkflow("cloud")
+            val raw = incoming.dataString ?: incoming.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+            val link = Regex("""https://[^\s<>"']+""").find(raw)?.value?.trimEnd('.', ',', ')')
+            val library =
+                link?.let { runCatching { Uri.parse(it).getQueryParameter("library") }.getOrNull() }
+            if (library == null) showWorkflow("cloud")
+            else {
+                screen = "workflow"
+                val loading = column()
+                loading.addView(text("Bibliothek laden …"))
+                show(loading)
+                workflows.openLibrary(library)
+            }
             return
         }
         val uris =
@@ -1381,20 +1393,33 @@ class NativeActivity : WebAppActivity() {
             openEditor(null)
         } else {
             screen = "workflow"
-            workflows.files(
-                "zip",
-                JSONArray()
-                    .put(
-                        JSONObject()
-                            .put("url", nativeFiles.register(uris.first()))
-                            .put("name", "import.zip")
-                    ),
+            val files = JSONArray()
+            uris.forEach { uri ->
+                var name = "import.zip"
+                contentResolver
+                    .query(
+                        uri,
+                        arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                        null,
+                        null,
+                        null,
+                    )
+                    ?.use { if (it.moveToFirst()) name = it.getString(0) }
+                files.put(JSONObject().put("url", nativeFiles.register(uri)).put("name", name))
+            }
+            if (
+                files.length() > 0 &&
+                    (0 until files.length()).all {
+                        files.getJSONObject(it).getString("name").endsWith(".salsabackup", true)
+                    }
             )
+                workflows.receiveBackup(files)
+            else workflows.files("zip", files)
         }
     }
 
     override fun onNewIntent(intent: Intent) {
-        if ((screen == "editor" && dirty) || busy) {
+        if ((screen == "editor" && dirty) || busy || (screen == "workflow" && workflows.isBusy)) {
             notice("Bitte den aktuellen Vorgang zuerst abschließen und danach erneut teilen.")
             return
         }
@@ -1405,7 +1430,7 @@ class NativeActivity : WebAppActivity() {
         ) {
             val raw = intent.dataString ?: intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
             val link = Regex("""https://[^\s<>"']+""").find(raw)?.value?.trimEnd('.', ',', ')')
-            if (link != null) {
+            if (link != null && Uri.parse(link).getQueryParameter("token_hash") != null) {
                 rpc("login", JSONObject().put("link", link)) { showWorkflow("cloud") }
                 return
             }

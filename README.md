@@ -23,7 +23,7 @@ Daten der früheren separaten Kotlin-Offline-Ansicht werden beim ersten Start ko
 
 ## APK installieren
 
-[GitHub Actions – Android APK](https://github.com/rodriges17/SalsaAppAndroid/actions/workflows/android-apk.yml) → erfolgreicher aktueller Lauf → **Artifacts → StepByStep-Android-debug-apk**. ZIP entpacken und `app-debug.apk` installieren. GitHub-Anmeldung kann für Artefakte erforderlich sein. Die APK ist eine mit dem Debug-Schlüssel signierte Testversion.
+[GitHub Actions – Android APK](https://github.com/rodriges17/SalsaAppAndroid/actions/workflows/android-apk.yml) → erfolgreicher aktueller Lauf → **Artifacts → StepByStep-Android-debug-apk**. ZIP entpacken und `app-debug.apk` installieren. GitHub-Anmeldung kann für Artefakte erforderlich sein. Die APK ist eine mit dem Debug-Schlüssel signierte Testversion. Der Workflow behält diesen Schlüssel für kommende Builds im Actions-Cache. Ältere APK-Generationen können eine andere Signatur haben: vor einem notwendigen Neuinstallieren zuerst ein vollständiges Backup speichern; Deinstallieren löscht den internen App-Speicher. Für eine dauerhafte Veröffentlichung ist eine eigene Release-Signierung erforderlich.
 
 ## Entwicklung und Prüfungen
 

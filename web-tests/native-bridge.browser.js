@@ -75,3 +75,26 @@ test('native HTTPS adapter streams uploads and responses and propagates cancella
  });
  assert.equal(result.json.ok,true);assert.equal(result.calls[0].method,'POST');assert.equal(JSON.parse(result.calls[0].body).action,'state');assert.equal(result.calls[1].parts,4);assert.equal(result.error,'AbortError');assert.equal(result.canceled.length,1);assert.equal(result.remaining,0);
  }finally{await context.close();}});
+
+test('native cloud upload preserves the server reservation/finalize/commit contract and abort releases reservations',async()=>{const{page,context}=await setup();try{
+ const actions=[],uploaded=[];let stall=false,started=false;
+ await page.route('https://tzaprobvauikssnpiucl.supabase.co/**',async route=>{
+  const request=route.request(),url=new URL(request.url());const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};
+  if(request.method()==='OPTIONS'){await route.fulfill({status:204,headers});return;}
+  let result={ok:true};
+  if(url.pathname==='/auth/v1/verify')result={access_token:'test-token',refresh_token:'test-refresh',expires_in:3600};
+  else if(url.pathname==='/functions/v1/cloud'){
+   const {action,payload}=request.postDataJSON();actions.push({action,payload});
+   if(action==='reserve')result={job:'job-1',media:payload.videos.map((_,i)=>({id:`media-${i}`,path:`user/video-${i}`}))};
+   if(action==='commit')result={revision:'revision-1'};
+  }else if(url.pathname.startsWith('/storage/v1/object/salsa-cloud/')){
+   started=true;uploaded.push(request.postDataBuffer());if(stall)await new Promise(resolve=>setTimeout(resolve,150));
+  }
+  try{await route.fulfill({status:200,headers,contentType:'application/json',body:JSON.stringify(result)});}catch{/* canceled request */}
+ });
+ await rpc(page,'login',{link:'https://rodriges17.github.io/SalsaAppCloud/?token_hash=unit-test-token-hash-1234567890123456&type=magiclink'});
+ const f=await create(page);await rpc(page,'cloudUpload',{id:f.id,videos:f.videoIds,library:'library-1',allowed:true});
+ assert.deepEqual(actions.map(a=>a.action),['reserve','finalize','commit','attach']);assert.equal(actions[2].payload.public_allowed,true);assert.deepEqual(uploaded[0],await readFile(new URL('./fixtures/video.mp4',import.meta.url)));
+ actions.length=0;stall=true;started=false;const pending=rpc(page,'cloudUpload',{id:f.id,videos:f.videoIds,allowed:false});pending.catch(()=>{});
+ while(!started)await new Promise(resolve=>setTimeout(resolve,5));await rpc(page,'cancel');await assert.rejects(()=>pending);assert.ok(actions.some(a=>a.action==='abort'&&a.payload.job==='job-1'));
+ }finally{await context.close();}});
