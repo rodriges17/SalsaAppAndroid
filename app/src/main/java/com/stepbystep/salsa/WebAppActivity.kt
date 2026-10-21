@@ -177,7 +177,7 @@ class WebAppActivity : Activity() {
         val candidate = when (incoming?.action) {
             Intent.ACTION_VIEW -> incoming.dataString
             Intent.ACTION_SEND -> if (incoming.type == "text/plain") {
-                Regex("""https://[^\\s<>"']+""").find(incoming.getStringExtra(Intent.EXTRA_TEXT).orEmpty())?.value
+                Regex("""https://[^\s<>"\']+""").find(incoming.getStringExtra(Intent.EXTRA_TEXT).orEmpty())?.value
             } else null
             else -> null
         } ?: return
