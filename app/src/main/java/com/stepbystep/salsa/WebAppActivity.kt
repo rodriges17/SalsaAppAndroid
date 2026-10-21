@@ -22,6 +22,9 @@ import androidx.webkit.WebViewClientCompat
 
 class WebAppActivity : Activity() {
     private lateinit var web: WebView
+    private lateinit var frame: android.widget.FrameLayout
+    private var fullscreenView: View? = null
+    private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private val fileRequest = 734
     private val saveRequest = 735
@@ -103,7 +106,7 @@ class WebAppActivity : Activity() {
         super.onCreate(state)
         window.statusBarColor = Color.rgb(23, 18, 31)
         window.navigationBarColor = Color.rgb(23, 18, 31)
-        val frame = android.widget.FrameLayout(this)
+        frame = android.widget.FrameLayout(this)
         web = WebView(this)
         frame.addView(web, android.widget.FrameLayout.LayoutParams(-1, -1))
         setContentView(frame)
@@ -123,6 +126,17 @@ class WebAppActivity : Activity() {
                 assets.shouldInterceptRequest(request.url)
         }
         web.webChromeClient = object : WebChromeClient() {
+            override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                if (fullscreenView != null) { callback.onCustomViewHidden(); return }
+                fullscreenView = view
+                fullscreenCallback = callback
+                frame.addView(view, android.widget.FrameLayout.LayoutParams(-1, -1))
+                web.visibility = View.GONE
+                window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            }
+            override fun onHideCustomView() { closeFullscreen() }
+
             override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
                 fileCallback?.onReceiveValue(null)
                 fileCallback = callback
@@ -225,9 +239,19 @@ class WebAppActivity : Activity() {
         menu.add("Seite neu laden").setOnMenuItemClickListener { web.reload(); true }
         return true
     }
+    private fun closeFullscreen() {
+        val view = fullscreenView ?: return
+        frame.removeView(view)
+        fullscreenView = null
+        web.visibility = View.VISIBLE
+        window.decorView.systemUiVisibility = 0
+        fullscreenCallback?.onCustomViewHidden()
+        fullscreenCallback = null
+    }
     @Deprecated("Android navigation")
     override fun onBackPressed() {
-        if (web.canGoBack()) web.goBack()
+        if (fullscreenView != null) closeFullscreen()
+        else if (web.canGoBack()) web.goBack()
         else AlertDialog.Builder(this).setMessage("Step by Step schließen?")
             .setNegativeButton("Abbrechen", null)
             .setPositiveButton("Schließen") { _, _ -> finish() }.show()
@@ -235,6 +259,7 @@ class WebAppActivity : Activity() {
     override fun onDestroy() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
+        closeFullscreen()
         downloads.abort()
         pendingSave?.delete()
         web.destroy()
