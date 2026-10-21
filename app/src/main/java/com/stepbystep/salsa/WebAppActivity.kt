@@ -24,6 +24,8 @@ class WebAppActivity : Activity() {
     private lateinit var web: WebView
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private val fileRequest = 734
+    private val saveRequest = 735
+    private var pendingSave: File? = null
     private var exportFile: File? = null
     private var exportStream: FileOutputStream? = null
     private val exportLock = Any()
@@ -57,19 +59,31 @@ class WebAppActivity : Activity() {
                 exportStream = null; exportFile = null; f
             }
             runOnUiThread {
-                try {
-                    val uri = FileProvider.getUriForFile(this@WebAppActivity, "${packageName}.files", file)
-                    val type = if (mime == "application/zip") mime else "application/octet-stream"
-                    val send = Intent(Intent.ACTION_SEND).apply {
-                        this.type = type
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        clipData = ClipData.newUri(contentResolver, "Export", uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    startActivity(Intent.createChooser(send, "ZIP speichern oder teilen"))
-                } catch (_: Exception) {
-                    Toast.makeText(this@WebAppActivity, "Export fehlgeschlagen", Toast.LENGTH_LONG).show()
-                }
+                AlertDialog.Builder(this@WebAppActivity).setTitle("Export bereit")
+                    .setItems(arrayOf("Auf Gerät speichern", "Mit anderer App teilen")) { _, choice ->
+                        if (choice == 0) {
+                            pendingSave?.delete()
+                            pendingSave = file
+                            val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = if (mime == "application/zip") "application/zip" else "application/octet-stream"
+                                putExtra(Intent.EXTRA_TITLE, file.name.substringAfter("-"))
+                            }
+                            try { startActivityForResult(intent, saveRequest) }
+                            catch (_: Exception) { pendingSave = null; file.delete(); Toast.makeText(this@WebAppActivity, "Speichern nicht verfügbar", Toast.LENGTH_LONG).show() }
+                        } else {
+                            try {
+                                val uri = FileProvider.getUriForFile(this@WebAppActivity, "${packageName}.files", file)
+                                val send = Intent(Intent.ACTION_SEND).apply {
+                                    type = if (mime == "application/zip") "application/zip" else "application/octet-stream"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    clipData = ClipData.newUri(contentResolver, "Export", uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                startActivity(Intent.createChooser(send, "Datei teilen"))
+                            } catch (_: Exception) { Toast.makeText(this@WebAppActivity, "Teilen fehlgeschlagen", Toast.LENGTH_LONG).show() }
+                        }
+                    }.setNegativeButton("Abbrechen") { _, _ -> file.delete() }.show()
             }
             return true
         }
@@ -167,6 +181,26 @@ class WebAppActivity : Activity() {
     @Deprecated("Android system file selection")
     override fun onActivityResult(code: Int, result: Int, data: Intent?) {
         super.onActivityResult(code, result, data)
+        if (code == saveRequest) {
+            val source = pendingSave
+            pendingSave = null
+            if (source != null) {
+                if (result == RESULT_OK && data?.data != null) {
+                    val target = data.data!!
+                    Thread {
+                        val saved = runCatching {
+                            source.inputStream().use { input ->
+                                val output = contentResolver.openOutputStream(target, "w") ?: error("Nicht schreibbar")
+                                output.use { input.copyTo(it, 65536) }
+                            }
+                        }.isSuccess
+                        source.delete()
+                        runOnUiThread { Toast.makeText(this, if (saved) "Export gespeichert" else "Speichern fehlgeschlagen", Toast.LENGTH_LONG).show() }
+                    }.start()
+                } else source.delete()
+            }
+            return
+        }
         if (code != fileRequest) return
         val uris = if (result == RESULT_OK && data != null) {
             val clips = data.clipData
@@ -194,6 +228,7 @@ class WebAppActivity : Activity() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
         downloads.abort()
+        pendingSave?.delete()
         web.destroy()
         super.onDestroy()
     }
