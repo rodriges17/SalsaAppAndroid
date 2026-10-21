@@ -302,7 +302,7 @@ class MainActivity : Activity() {
             crop = !crop
             val params = video.layoutParams as FrameLayout.LayoutParams
             val dimensions = runCatching {
-                MediaMetadataRetriever().use { retriever ->
+                MediaMetadataRetriever().releasing { retriever ->
                     retriever.setDataSource(this, Uri.parse(figure.video))
                     Pair(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt() ?: 16,
                         retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt() ?: 9)

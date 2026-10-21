@@ -297,7 +297,7 @@ class NativeActivity : WebAppActivity() {
                         var duration = 0L
                         var width = 0
                         var height = 0
-                        MediaMetadataRetriever().use { r ->
+                        MediaMetadataRetriever().releasing { r ->
                             r.setDataSource(this, uri)
                             duration =
                                 r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
@@ -972,7 +972,7 @@ class NativeActivity : WebAppActivity() {
                             ?.use { if (it.moveToFirst()) name = it.getString(0) }
                         var poster: String? = null
                         runCatching {
-                            MediaMetadataRetriever().use { r ->
+                            MediaMetadataRetriever().releasing { r ->
                                 r.setDataSource(this, uri)
                                 r.getFrameAtTime(0)?.let { bmp ->
                                     val factor = minOf(1f, 320f / maxOf(bmp.width, bmp.height))
@@ -1110,7 +1110,7 @@ class NativeActivity : WebAppActivity() {
                 Thread {
                         var poster: String? = null
                         runCatching {
-                            MediaMetadataRetriever().use { r ->
+                            MediaMetadataRetriever().releasing { r ->
                                 r.setDataSource(file.absolutePath)
                                 r.getFrameAtTime(0)?.let { bmp ->
                                     val scale = minOf(1f, 320f / maxOf(bmp.width, bmp.height))
