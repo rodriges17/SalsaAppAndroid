@@ -75,6 +75,18 @@ class NativeUiTest {
     }
 
     @Test
+    fun nativeCloudReadsPublicLibrariesWithoutBrowserOrigin() {
+        ActivityScenario.launch(NativeActivity::class.java).use {
+            waitText("Meine Figuren")
+            waitText("Cloud-Speicher").click()
+            // This native control is rendered only after the real anonymous cloud state returns.
+            // No account is used and no server-side data is changed.
+            waitText("Bibliotheken")
+            assertTrue(device.findObjects(By.clazz("android.widget.EditText")).isNotEmpty())
+        }
+    }
+
+    @Test
     fun sharedVideosRequireIndividualConfirmationAndPlayInNativePlayer() {
         val directory = File(context.cacheDir, "exports").apply { mkdirs() }
         val uris = ArrayList<Uri>()
