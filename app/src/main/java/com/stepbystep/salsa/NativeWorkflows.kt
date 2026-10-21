@@ -243,6 +243,7 @@ class NativeWorkflows(
     }
 
     fun receiveBackup(files: JSONArray) {
+        begin("Backup wiederherstellen")
         call("backup", JSONObject().put("action", "startRestore")) {
             backupAction("files", JSONObject().put("files", files))
         }
@@ -269,7 +270,8 @@ class NativeWorkflows(
     }
 
     fun files(kind: String, files: JSONArray) {
-        if (kind == "zip")
+        if (kind == "zip") {
+            begin("Figur importieren")
             call(
                 "packageImport",
                 JSONObject().put("url", files.getJSONObject(0).getString("url")),
@@ -290,7 +292,7 @@ class NativeWorkflows(
                         .show()
                 } else imported(data)
             }
-        else backupAction("files", JSONObject().put("files", files))
+        } else backupAction("files", JSONObject().put("files", files))
     }
 
     private fun settings() {

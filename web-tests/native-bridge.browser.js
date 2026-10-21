@@ -98,3 +98,9 @@ test('native cloud upload preserves the server reservation/finalize/commit contr
  actions.length=0;stall=true;started=false;const pending=rpc(page,'cloudUpload',{id:f.id,videos:f.videoIds,allowed:false});pending.catch(()=>{});
  while(!started)await new Promise(resolve=>setTimeout(resolve,5));await rpc(page,'cancel');await assert.rejects(()=>pending);assert.ok(actions.some(a=>a.action==='abort'&&a.payload.job==='job-1'));
  }finally{await context.close();}});
+
+test('canceling a native ZIP import leaves the saved library untouched',async()=>{const{page,context}=await setup();try{
+ await create(page);let started=false;
+ await page.route(origin+'/slow-package.zip',async route=>{started=true;await new Promise(resolve=>setTimeout(resolve,150));try{await route.fulfill({status:200,body:'not a ZIP'});}catch{/* canceled */}});
+ const pending=rpc(page,'packageImport',{url:origin+'/slow-package.zip'});pending.catch(()=>{});while(!started)await new Promise(resolve=>setTimeout(resolve,5));await rpc(page,'cancel');await assert.rejects(()=>pending,/abort/i);assert.equal((await rpc(page,'list')).length,1);
+ }finally{await context.close();}});
