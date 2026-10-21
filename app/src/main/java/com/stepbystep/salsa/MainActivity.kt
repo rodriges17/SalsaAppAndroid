@@ -81,7 +81,7 @@ class MainActivity : Activity() {
     }
     private fun setScreen(view: LinearLayout) {
         root = view
-        setContentView(ScrollView(this).apply { setBackgroundColor(bg); fillViewport = true; addView(root) })
+        setContentView(ScrollView(this).apply { setBackgroundColor(bg); isFillViewport = true; addView(root) })
     }
     private fun save() {
         val data = JSONArray()
@@ -205,7 +205,7 @@ class MainActivity : Activity() {
             onVideoConfirmed = { confirmed ->
                 uri = confirmed.toString()
                 videoLabel.text = "Video bestätigt ✓"
-                setScreen(page)
+                // Editor remains visible; its video confirmation label updates in place.
             }
             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
