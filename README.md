@@ -1,25 +1,24 @@
-# Step by Step – Native Android
+# Step by Step – Android
 
-Eigenständige native Android-App für lokale Salsa-Tanzfiguren und Videos, angelehnt an das Design von [SalsaAppCloud](https://github.com/rodriges17/SalsaAppCloud).
+Native Kotlin Android-App für Salsa-Videos (Android 8.0+).
 
-## Funktionen (erste native Version)
-- Figuren mit Name, Beschreibung, Tags und Lernstand (Neu / Am Üben / Sitzt)
-- lokale Videodatei über Androids Dateiauswahl auswählen und **vor dem Speichern ansehen und bestätigen**
-- persistente Datei-URI-Berechtigung, lokale Figurenverwaltung und Video-Vorschaubilder
-- Suche und Filter; Einstellungen
-- Lernplayer mit Geschwindigkeiten 0,25× / 0,5× / 0,75× / 1×, 5 Sekunden zurück, Loop und A–B
-- Hochformat zu Beginn des Players; manuell zwischen Hoch- und Querformat wechseln
-- Fit (Standard) und Crop (bildschirmfüllend)
+## Features
+- Offline-Figurenverwaltung mit Name, Tags, Beschreibung und Lernstand.
+- Lokale Android-Dateiauswahl für Videos mit verpflichtender Vorschau vor Übernahme.
+- Vorschaubild aus ausgewähltem Video und Filter/Suche.
+- Lernplayer: 0,25× / 0,5× / 0,75× / 1×, −5 Sekunden, A–B-Schleife, Gesamt-Loop.
+- Fit als Standard, Crop als Option, manueller Hoch-/Querformatwechsel.
+- Einstellungsansicht.
 
-**Abgrenzung:** Noch kein Cloud-Sync, ZIP-Import/Export und keine vollständige Funktionsparität zur Web-App. Videos bleiben am vom Android-Dateiauswahldialog gewählten Speicherort; Android gewährt einen persistenten Lesezugriff, solange Datei und Berechtigung bestehen. Die App speichert kein zweites Video. Die native App verwendet unabhängig vom Browser eigene Daten.
+## APK herunterladen
+[GitHub Actions → Android APK](https://github.com/rodriges17/SalsaAppAndroid/actions/workflows/android-apk.yml) öffnen, den neuesten **erfolgreichen** Lauf wählen und unter **Artifacts** das ZIP `StepByStep-Android-debug-apk` herunterladen. ZIP entpacken und `app-debug.apk` auf Android installieren.
 
-## Build
-Android Studio (JDK 17) öffnen, Gradle synchronisieren und `assembleDebug` starten. Alternativ lokal mit installiertem Gradle 8.9 und Android SDK:
+Der Build erfolgt automatisch bei jedem Push auf `main` und kann über **Run workflow** manuell ausgelöst werden.
 
-```sh
-gradle :app:assembleDebug
-```
+Die APK ist als Debug-Build signiert, nicht für den Google Play Store geeignet. Eine lokal installierte Debug-APK sollte nur aus vertrauenswürdigen Quellen installiert werden.
 
-Die APK liegt dann unter `app/build/outputs/apk/debug/app-debug.apk`.
+## Lokal bauen
+Mit Android Studio und JDK 17 importieren. Alternativ Gradle 8.9 installieren und `gradle :app:assembleDebug` ausführen.
 
-Ein fertiger APK-Build wurde durch diesen Commit **nicht** ausgeführt; das Projekt enthält derzeit keinen Gradle Wrapper. 
+## Noch ausstehend
+Keine vollständige Funktionsparität mit SalsaAppCloud: insbesondere Cloud-Synchronisation, Bibliothek, ZIP-Import/Export, Mehrfachvideos pro Figur und vollständiger Backup-Workflow sind noch nicht umgesetzt. Aktuelle App-Daten sind getrennt von PWA-Daten. Native Tests auf echten Geräten stehen aus.
