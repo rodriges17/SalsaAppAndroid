@@ -32,7 +32,7 @@ class WebAppActivity : Activity() {
             synchronized(exportLock) {
                 if (exportStream != null) return false
                 if (!web.url.orEmpty().startsWith("https://appassets.androidplatform.net/assets/")) return false
-                val safe = name.substringAfterLast('/').substringAfterLast('\\\\').replace(Regex("[^A-Za-z0-9._-]"), "_").take(100).ifBlank { "export.zip" }
+                val safe = name.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_").take(100).ifBlank { "export.zip" }
                 val dir = File(cacheDir, "exports").apply { mkdirs() }
                 val target = File(dir, "${System.currentTimeMillis()}-$safe")
                 return try { exportFile = target; exportStream = FileOutputStream(target); true }
