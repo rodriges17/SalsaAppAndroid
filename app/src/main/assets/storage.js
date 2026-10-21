@@ -101,7 +101,8 @@ export async function listFigures() {
       if (!fileProblem) try {
         const media = await folder.handle.getDirectoryHandle('media');
         for (const v of f.videos) {
-          const file = await (await media.getFileHandle(v.file)).getFile();
+          const handle = await media.getFileHandle(v.file);
+          const file = handle.getMetadata ? await handle.getMetadata() : await handle.getFile();
           if (file.size !== v.size || (v.modifiedAt != null && file.lastModified !== v.modifiedAt)) { fileProblem = 'Videodatei wurde verändert. Bitte bearbeiten und ersetzen.'; break; }
         }
       } catch { fileProblem = 'Videodatei fehlt. Bitte bearbeiten und ersetzen.'; }

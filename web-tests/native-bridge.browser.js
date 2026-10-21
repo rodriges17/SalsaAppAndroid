@@ -62,3 +62,16 @@ test('Android document handles survive IndexedDB reload and transfer keeps the o
  const original=await rpc(page,'transfer',{id:copy.id,storageFolder:folder,target:null});assert.ok(original.id!==f.id);assert.equal((await rpc(page,'list')).length,3);
  await rpc(page,'delete',{id:copy.id,storageFolder:folder});assert.equal((await rpc(page,'list')).length,2);
  }finally{await context.close();}});
+
+test('native HTTPS adapter streams uploads and responses and propagates cancellation without browser CORS',async()=>{const{page,context}=await setup();try{
+ const result=await page.evaluate(async()=>{
+  const calls=[];const canceled=[];
+  window.AndroidNetwork={start(id,url,method,headers,body,token){calls.push({id,url,method,headers:JSON.parse(headers),body,token,parts:token?NativeMedia.data.get(token).length:0});if(url.endsWith('/slow'))return;const data=new Blob([JSON.stringify({ok:true})],{type:'application/json'});setTimeout(()=>AndroidNetworkResult(id,{status:200,type:'application/json',url:URL.createObjectURL(data)}));},cancel(id){canceled.push(id);}};
+  await import('./android-network.js?native-test');
+  const response=await fetch('https://tzaprobvauikssnpiucl.supabase.co/functions/v1/cloud',{method:'POST',headers:{apikey:'public-test-key','Content-Type':'application/json'},body:JSON.stringify({action:'state',payload:{}})});const json=await response.json();
+  await fetch('https://tzaprobvauikssnpiucl.supabase.co/storage/v1/object/salsa-cloud/test',{method:'POST',headers:{authorization:'Bearer test'},body:new Blob([new Uint8Array(150000)],{type:'video/mp4'})});
+  const controller=new AbortController();const pending=fetch('https://tzaprobvauikssnpiucl.supabase.co/auth/v1/slow',{signal:controller.signal});controller.abort();let error;try{await pending;}catch(e){error=e.name;}
+  return {json,calls,canceled,error,remaining:NativeMedia.data.size};
+ });
+ assert.equal(result.json.ok,true);assert.equal(result.calls[0].method,'POST');assert.equal(JSON.parse(result.calls[0].body).action,'state');assert.equal(result.calls[1].parts,4);assert.equal(result.error,'AbortError');assert.equal(result.canceled.length,1);assert.equal(result.remaining,0);
+ }finally{await context.close();}});

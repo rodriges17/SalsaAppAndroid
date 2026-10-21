@@ -12,6 +12,7 @@
     async getFileHandle(name, options={}) { return new Handle(call({...this,op:'child',name,directory:false,create:!!options.create})); }
     async *keys() { for(const name of call({...this,op:'list'})) yield name; }
     async removeEntry(name) { call({...this,op:'remove',name}); }
+    async getMetadata() { return call({...this,op:'stat'}); }
     async getFile() { const info=call({...this,op:'stat'}),r=await fetch(info.url); if(!r.ok)throw new DOMException('Datei nicht gefunden','NotFoundError'); const blob=await r.blob(); return new File([blob],info.name,{type:blob.type,lastModified:info.lastModified}); }
     async createWritable() {
       const token=call({...this,op:'begin'}); let ended=false;
