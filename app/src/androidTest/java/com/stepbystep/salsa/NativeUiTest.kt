@@ -27,19 +27,25 @@ class NativeUiTest {
     private val device = UiDevice.getInstance(instrumentation)
 
     private fun waitText(value: String): androidx.test.uiautomator.UiObject2 {
-        val found =
-            device.wait(
-                Until.findObject(
-                    By.text(
-                        Pattern.compile(
-                            Pattern.quote(value),
-                            Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE,
-                        )
-                    )
-                ),
-                30000,
+        val matcher =
+            By.text(
+                Pattern.compile(
+                    Pattern.quote(value),
+                    Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE,
+                )
             )
-        if (found != null) return found
+        val deadline = android.os.SystemClock.uptimeMillis() + 30000
+        while (android.os.SystemClock.uptimeMillis() < deadline) {
+            // AOSP Quickstep can show an unrelated ANR during headless emulator boot.
+            // Dismiss only the launcher dialog; an ANR from this app must fail the test.
+            if (device.hasObject(By.text("Quickstep isn't responding"))) {
+                device.findObject(By.text("Close app"))?.click()
+                device.waitForIdle()
+            }
+            device.wait(Until.findObject(matcher), 500)?.let {
+                return it
+            }
+        }
         val hierarchy = ByteArrayOutputStream()
         device.dumpWindowHierarchy(hierarchy)
         error("Native control missing: $value; UI: ${hierarchy.toString("UTF-8").take(12000)}")
