@@ -8,7 +8,7 @@ const {chromium}=process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES?require(process.
 const assets=new URL('../app/src/main/assets/',import.meta.url);
 let browser,server,origin;
 before(async()=>{
- server=createServer(async(req,res)=>{try{const path=decodeURI(req.url.split('?')[0]);const file=path==='/fixture.mp4'?new URL('./fixtures/video.mp4',import.meta.url):new URL('.'+path,assets);const data=await readFile(file);const type=path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':path.endsWith('.mp4')?'video/mp4':path.endsWith('.png')?'image/png':'text/html';res.writeHead(200,{'Content-Type':type});res.end(data);}catch{res.writeHead(404);res.end();}}).listen(0,'127.0.0.1');
+ server=createServer(async(req,res)=>{try{const path=decodeURI(req.url.split('?')[0]);const file=path==='/fixture.mp4'?new URL('./fixtures/video.mp4',import.meta.url):path==='/assets/old-upgrade-sw.js'?new URL('./fixtures/old-upgrade-sw.js',import.meta.url):new URL('.'+(path.startsWith('/assets/')?path.slice(7):path),assets);const data=await readFile(file);const type=path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':path.endsWith('.mp4')?'video/mp4':path.endsWith('.png')?'image/png':'text/html';res.writeHead(200,{'Content-Type':type});res.end(data);}catch{res.writeHead(404);res.end();}}).listen(0,'127.0.0.1');
  await new Promise(r=>server.once('listening',r));origin=`http://127.0.0.1:${server.address().port}`;
  browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE,headless:true,args:['--no-sandbox']});
 });
@@ -103,4 +103,13 @@ test('canceling a native ZIP import leaves the saved library untouched',async()=
  await create(page);let started=false;
  await page.route(origin+'/slow-package.zip',async route=>{started=true;await new Promise(resolve=>setTimeout(resolve,150));try{await route.fulfill({status:200,body:'not a ZIP'});}catch{/* canceled */}});
  const pending=rpc(page,'packageImport',{url:origin+'/slow-package.zip'});pending.catch(()=>{});while(!started)await new Promise(resolve=>setTimeout(resolve,5));await rpc(page,'cancel');await assert.rejects(()=>pending,/abort/i);assert.equal((await rpc(page,'list')).length,1);
+ }finally{await context.close();}});
+
+test('Android upgrade retires an old service-worker shell while preserving figures and video bytes',async()=>{const{page,context}=await setup();try{
+ await page.goto(origin+'/assets/index.html');await page.waitForFunction(()=>window.nativeReady);const f=await create(page,'Bestehende Android-Figur');
+ await page.evaluate(async()=>{await caches.open('salsa-trainer:/assets/:obsolete-shell');await navigator.serviceWorker.register('/assets/old-upgrade-sw.js',{scope:'/assets/'});await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));});
+ await page.goto(origin+'/assets/index.html');assert.match(await page.locator('body').innerText(),/OLD ANDROID SHELL/);
+ await page.goto(origin+'/android-bootstrap.html');await page.waitForURL(origin+'/assets/index.html');await page.waitForFunction(()=>window.nativeReady);
+ const all=await rpc(page,'list');assert.equal(all[0].id,f.id);assert.equal(all[0].status,'Am Üben');const media=await rpc(page,'media',{id:f.id,video:f.videoIds[0]});const bytes=await page.evaluate(t=>NativeMedia.data.get(t).flatMap(b=>Array.from(atob(b),c=>c.charCodeAt(0))),media.token);assert.deepEqual(Buffer.from(bytes),await readFile(new URL('./fixtures/video.mp4',import.meta.url)));
+ assert.equal(await page.evaluate(async()=>(await navigator.serviceWorker.getRegistrations()).length),0);assert.ok(!(await page.evaluate(()=>caches.keys())).includes('salsa-trainer:/assets/:obsolete-shell'));
  }finally{await context.close();}});

@@ -171,7 +171,7 @@ open class WebAppActivity : Activity() {
     }
 
     private val downloads = AndroidDownloads()
-    private val appUrl = "https://appassets.androidplatform.net/assets/index.html"
+    private val appUrl = "https://appassets.androidplatform.net/android-bootstrap.html"
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -208,6 +208,26 @@ open class WebAppActivity : Activity() {
                     "/network/",
                     WebViewAssetLoader.PathHandler { path -> nativeNetwork.response(path) },
                 )
+                .addPathHandler(
+                    "/",
+                    WebViewAssetLoader.PathHandler { path ->
+                        when (path) {
+                            "android-bootstrap.html" ->
+                                WebResourceResponse(
+                                    "text/html",
+                                    "UTF-8",
+                                    applicationContext.assets.open("android-bootstrap.html"),
+                                )
+                            "android-bootstrap.js" ->
+                                WebResourceResponse(
+                                    "application/javascript",
+                                    "UTF-8",
+                                    applicationContext.assets.open("android-bootstrap.js"),
+                                )
+                            else -> null
+                        }
+                    },
+                )
                 .build()
         web.webViewClient =
             object : WebViewClientCompat() {
@@ -218,7 +238,8 @@ open class WebAppActivity : Activity() {
                     if (
                         request.url.scheme == "https" &&
                             request.url.host == "appassets.androidplatform.net" &&
-                            request.url.path.orEmpty().startsWith("/assets/")
+                            (request.url.path.orEmpty().startsWith("/assets/") ||
+                                request.url.path == "/android-bootstrap.html")
                     )
                         return false
                     if (request.isForMainFrame) {

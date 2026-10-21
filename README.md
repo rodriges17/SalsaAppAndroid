@@ -17,6 +17,8 @@ Android-App ab Android 8 (API 26), mit nativen Kotlin-Ansichten für Figuren, Ed
 
 Die sichtbaren Ansichten und der Player sind native Android-Views. Ein nicht sichtbarer WebView führt die aus SalsaAppCloud übernommenen JavaScript-Module für IndexedDB, Cache Storage, Ordnerkataloge, ZIP, Backup und Cloud-Verträge aus. Das ist **keine vollständige Neuschreibung der Geschäftslogik in Kotlin**. Dadurch nutzen native Ansichten und die erhaltene Standardansicht dieselbe bestehende Android-Bibliothek unter `https://appassets.androidplatform.net/assets/` statt zwei getrennte Datenbestände.
 
+Ein Startschritt außerhalb des alten Service-Worker-Bereichs entfernt veraltete Android-App-Shells. Figuren, Medien-Caches und Ordnerberechtigungen bleiben dabei erhalten; ein Integrationstest prüft diesen Updatefall.
+
 Die native HTTPS-Brücke ist auf den konfigurierten Supabase-Host und dessen API-/Auth-/Storage-Pfade beschränkt. Sie überträgt Dateien in begrenzten Blöcken und umgeht die für Browser geltende Origin-Beschränkung der bestehenden PWA-API. Administrative Schlüssel werden nicht in die App eingebettet; Berechtigungen bleiben serverseitig geprüft.
 
 Daten der früheren separaten Kotlin-Offline-Ansicht werden beim ersten Start kopiert, sofern deren ursprüngliche Video-URIs noch lesbar sind. Alte Daten werden dabei nicht gelöscht. Separat im Browser installierte PWAs behalten ihren eigenen Speicher; deren Daten können per ZIP oder vollständigem Backup übernommen werden. Das Backend selbst ist nicht im APK enthalten.
