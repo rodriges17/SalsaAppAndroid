@@ -296,7 +296,7 @@ export function initCloud(callbacks) {
   document.getElementById('cloudCancelUpload').onclick = () => controller?.abort();
   dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
   document.getElementById('cloudButton').onclick = () => openCloud();
-  const query = new URLSearchParams(location.search); if (query.has('library') || query.has('cloud')) setTimeout(() => openCloud(null, query.get('library')), 0);
+  const query = new URLSearchParams(location.search); if (!window.NativeUI && (query.has('library') || query.has('cloud'))) setTimeout(() => openCloud(null, query.get('library')), 0);
 }
 export async function openCloud(local = null, library = null) {
   if (busy || dialog.open) return; source = local; current = library; area = 'figures';

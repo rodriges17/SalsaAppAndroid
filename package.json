@@ -1,0 +1,1 @@
+{"name":"step-by-step-android","private":true,"type":"module","scripts":{"test":"node --test web-tests/*.test.js","test:bridge":"node --test web-tests/*.browser.js"}}

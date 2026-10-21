@@ -26,3 +26,20 @@ if (window.AndroidDownloads) {
     }
   }, true);
 }
+// Native file sharing makes the PWA's ZIP and multi-part backup share actions available in WebView.
+if (window.AndroidDownloads) {
+  navigator.canShare = data => Array.isArray(data?.files) && data.files.length === 1;
+  navigator.share = async data => {
+    if (!navigator.canShare(data)) throw new Error('Bitte eine Datei zum Teilen wählen.');
+    const file = data.files[0];
+    if (!AndroidDownloads.start(file.name || 'export.zip')) throw new Error('Ein Export läuft bereits.');
+    try {
+      for (let p=0;p<file.size;p+=49152) {
+        const bytes = new Uint8Array(await file.slice(p,p+49152).arrayBuffer()); let binary='';
+        for(const b of bytes)binary+=String.fromCharCode(b);
+        if(!AndroidDownloads.chunk(btoa(binary)))throw new Error('Export fehlgeschlagen.');
+      }
+      if(!AndroidDownloads.finish(file.type||'application/octet-stream'))throw new Error('Teilen fehlgeschlagen.');
+    } catch(e) {AndroidDownloads.abort();throw e;}
+  };
+}

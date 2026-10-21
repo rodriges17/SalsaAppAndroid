@@ -17,11 +17,11 @@ function settings() {
 async function entries(key) {
   const db = await settings(); return new Promise((resolve, reject) => {
     const tx = db.transaction('entries'), r = key === undefined ? tx.objectStore('entries').getAll() : tx.objectStore('entries').get(key); let value;
-    r.onsuccess = () => { value = r.result; }; tx.oncomplete = () => resolve(value); tx.onabort = () => reject(tx.error);
+    r.onsuccess = () => { value = r.result; }; tx.oncomplete = () => { const revive = e => e?.handle ? { ...e, handle: globalThis.reviveAndroidHandle?.(e.handle) ?? e.handle } : e; resolve(Array.isArray(value) ? value.map(revive) : revive(value)); }; tx.onabort = () => reject(tx.error);
   });
 }
 async function put(value) {
-  const db = await settings(); return new Promise((resolve, reject) => { const tx = db.transaction('entries', 'readwrite'); tx.objectStore('entries').put(value); tx.oncomplete = resolve; tx.onabort = () => reject(tx.error); tx.onerror = () => {}; });
+  const db = await settings(); return new Promise((resolve, reject) => { const tx = db.transaction('entries', 'readwrite'); tx.objectStore('entries').put(value.handle ? { ...value, handle: globalThis.serializeAndroidHandle?.(value.handle) ?? value.handle } : value); tx.oncomplete = resolve; tx.onabort = () => reject(tx.error); tx.onerror = () => {}; });
 }
 const knownFolders = new Map();
 const chosenFolders = new WeakMap();

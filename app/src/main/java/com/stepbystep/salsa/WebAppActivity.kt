@@ -20,9 +20,11 @@ import android.net.Uri
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 
-class WebAppActivity : Activity() {
-    private lateinit var web: WebView
-    private lateinit var frame: android.widget.FrameLayout
+open class WebAppActivity : Activity() {
+    protected lateinit var web: WebView
+    protected lateinit var frame: android.widget.FrameLayout
+    protected lateinit var nativeFiles: NativeFiles
+    protected lateinit var nativeMedia: NativeMedia
     private var fullscreenView: View? = null
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
@@ -36,7 +38,7 @@ class WebAppActivity : Activity() {
         @JavascriptInterface fun start(name: String): Boolean {
             synchronized(exportLock) {
                 if (exportStream != null) return false
-                if (!web.url.orEmpty().startsWith("https://appassets.androidplatform.net/assets/")) return false
+                // The privileged WebView only loads bundled app assets; main-frame navigation is blocked.
                 val safe = name.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_").take(100).ifBlank { "export.zip" }
                 val dir = File(cacheDir, "exports").apply { mkdirs() }
                 val target = File(dir, "${System.currentTimeMillis()}-$safe")
@@ -110,14 +112,21 @@ class WebAppActivity : Activity() {
         web = WebView(this)
         frame.addView(web, android.widget.FrameLayout.LayoutParams(-1, -1))
         setContentView(frame)
+        frame.setOnApplyWindowInsetsListener { view, insets ->
+            view.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+            insets
+        }
+        nativeFiles = NativeFiles(this) { source -> runOnUiThread { web.evaluateJavascript(source, null) } }
+        nativeMedia = NativeMedia(this)
         val assets = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .addPathHandler("/native/", WebViewAssetLoader.PathHandler { path -> nativeFiles.response(path) })
             .build()
         web.webViewClient = object : WebViewClientCompat() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                if (request.url.host == "appassets.androidplatform.net") return false
+                if (request.url.scheme == "https" && request.url.host == "appassets.androidplatform.net" && request.url.path.orEmpty().startsWith("/assets/")) return false
                 if (request.isForMainFrame) {
-                    runCatching { startActivity(Intent(Intent.ACTION_VIEW, request.url)) }
+                    if (request.url.scheme in listOf("https", "mailto")) runCatching { startActivity(Intent(Intent.ACTION_VIEW, request.url)) }
                     return true
                 }
                 return false
@@ -168,12 +177,22 @@ class WebAppActivity : Activity() {
             mediaPlaybackRequiresUserGesture = true
         }
         web.addJavascriptInterface(downloads, "AndroidDownloads")
+        web.addJavascriptInterface(nativeFiles, "AndroidFiles")
+        web.addJavascriptInterface(nativeMedia, "NativeMedia")
+        web.addJavascriptInterface(object {
+            @JavascriptInterface fun rotate(landscape: Boolean) { runOnUiThread { requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT } }
+            @JavascriptInterface fun keepAwake(enabled: Boolean) { runOnUiThread { if (enabled) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } }
+            @JavascriptInterface fun fullscreen(enabled: Boolean) { runOnUiThread { window.decorView.systemUiVisibility = if (enabled) View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY else 0 } }
+        }, "AndroidPlatform")
+        configureNativeBridge()
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
         handleSharedLogin(intent)
         if (web.url.isNullOrEmpty()) web.loadUrl(appUrl)
     }
 
-    private fun handleSharedLogin(incoming: Intent?) {
+    protected open fun configureNativeBridge() {}
+
+    protected fun handleSharedLogin(incoming: Intent?) {
         val candidate = when (incoming?.action) {
             Intent.ACTION_VIEW -> incoming.dataString
             Intent.ACTION_SEND -> if (incoming.type == "text/plain") {
@@ -191,7 +210,7 @@ class WebAppActivity : Activity() {
         val token = link.getQueryParameter("token_hash") ?: return
         if (!token.matches(Regex("[A-Za-z0-9_-]{16,512}"))) return
         // Never open an external origin with the privileged JavaScript bridge.
-        web.loadUrl(appUrl + "?token_hash=" + Uri.encode(token) + "&type=magiclink")
+        web.loadUrl(appUrl + "?token_hash=" + Uri.encode(token) + "&type=magiclink&cloud=1")
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -203,6 +222,7 @@ class WebAppActivity : Activity() {
     @Deprecated("Android system file selection")
     override fun onActivityResult(code: Int, result: Int, data: Intent?) {
         super.onActivityResult(code, result, data)
+        if (code == NativeFiles.PICK_DIRECTORY) { nativeFiles.picked(result, data); return }
         if (code == saveRequest) {
             val source = pendingSave
             pendingSave = null
@@ -232,13 +252,6 @@ class WebAppActivity : Activity() {
         fileCallback?.onReceiveValue(uris)
         fileCallback = null
     }
-    override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
-        menu.add("Native Offline-Version").setOnMenuItemClickListener {
-            startActivity(Intent(this, MainActivity::class.java)); true
-        }
-        menu.add("Seite neu laden").setOnMenuItemClickListener { web.reload(); true }
-        return true
-    }
     private fun closeFullscreen() {
         val view = fullscreenView ?: return
         frame.removeView(view)
@@ -256,12 +269,21 @@ class WebAppActivity : Activity() {
             .setNegativeButton("Abbrechen", null)
             .setPositiveButton("Schließen") { _, _ -> finish() }.show()
     }
+    override fun onPause() {
+        web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause()); window.dispatchEvent(new Event('nativepause'))", null)
+        web.onPause()
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onPause()
+    }
+    override fun onResume() { super.onResume(); if (::web.isInitialized) web.onResume() }
     override fun onDestroy() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
         closeFullscreen()
         downloads.abort()
         pendingSave?.delete()
+        nativeFiles.close()
+        nativeMedia.close()
         web.destroy()
         super.onDestroy()
     }

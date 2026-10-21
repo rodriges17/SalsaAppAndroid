@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [main]
+    branches: [main, codex/native-pwa-parity]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -20,8 +20,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify shared PWA storage and exchange formats
+        run: npm test
       - name: Compile Android Debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: StepByStep-Android-debug-apk

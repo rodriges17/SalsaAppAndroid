@@ -382,7 +382,7 @@ async function storageInfo() {
     $('storageDetails').textContent = `${estimate ? `Ungefähr ${Math.round((estimate.usage ?? 0) / 1048576)} MB lokal belegt. ` : ''}${persistent ? 'Der Browser hat dauerhaften Speicher gewährt.' : 'Dauerhafter Speicher ist bisher nicht bestätigt.'}`;
   } catch { $('storageDetails').textContent = 'Der Browser kann keine Speicherinformationen anzeigen.'; }
   try { await renderDeviceStorage(); } catch (e) { $('deviceStorageStatus').textContent = storageMessage(e); }
-  $('offlineDetails').textContent = offlineReady ? 'Die App ist für Offline-Aufrufe bereit. Gespeicherte Videos funktionieren ohne Netz.' : 'Bitte die App einmal online laden und warten, bis „Offline bereit“ angezeigt wird.';
+  $('offlineDetails').textContent = window.AndroidPlatform ? 'Die Oberfläche ist im APK enthalten und startet offline. Cloud-Funktionen benötigen Internet.' : offlineReady ? 'Die App ist für Offline-Aufrufe bereit. Gespeicherte Videos funktionieren ohne Netz.' : 'Bitte die App einmal online laden und warten, bis „Offline bereit“ angezeigt wird.';
 }
 function showInfoDialog() {
   const dialog = $('infoDialog');
@@ -399,7 +399,7 @@ $('persistStorage').onclick = async () => {
   try { const granted = await navigator.storage?.persist?.(); $('persistenceResult').textContent = granted ? 'Dauerhafter Speicher wurde gewährt.' : 'Der Browser hat die Anfrage nicht bestätigt. Die App bleibt nutzbar. Auf dem Home-Bildschirm installierte Apps werden bevorzugt berücksichtigt.'; await storageInfo(); }
   catch { $('persistenceResult').textContent = 'Dieser Browser unterstützt die Speicheranfrage nicht.'; }
 };
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && !window.AndroidPlatform) {
   $('offlineStatus').textContent = 'Offline-Nutzung wird vorbereitet …';
   navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(registration => {
     const update = () => { if (navigator.onLine) registration.update().catch(() => {}); };
@@ -516,7 +516,7 @@ initBackup({ confirm: confirmAction, changed, refresh });
 // Register interaction handlers before storage recovery, which may wait for another tab.
 $('appVersion').textContent = `Version ${APP_VERSION}`;
 document.documentElement.dataset.appVersion = APP_VERSION;
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && !window.AndroidPlatform) {
   let controlled = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (controlled) $('updateNotice').hidden = false;
@@ -545,3 +545,27 @@ initCloud({ confirm: confirmAction, imported: async imported => {
 } });
 try { await cleanupInterruptedImports(); } catch { /* Refresh reports unavailable storage. */ }
 await refresh();
+
+// Android shell routes advanced workflows through the same controllers as the PWA.
+window.AndroidAppUI = {
+  async show(action, key = null) {
+    await refresh();
+    const f = key ? figures.find(f => f.id === key.id && (f.storageFolder ?? null) === (key.storageFolder ?? null)) : null;
+    if (key && !f) throw new Error('Figur nicht mehr vorhanden.');
+    if (action === 'cloud') await openCloud(f);
+    else if (action === 'share') await openShare(f);
+    else if (action === 'transfer') await moveFigure(f);
+    else if (action === 'settings') $('infoButton').click();
+    else if (action === 'import') $('importFigure').click();
+  },
+  back() {
+    const dialogs = [...document.querySelectorAll('dialog[open]')];
+    const top = dialogs.at(-1);
+    if (top) {
+      const event = new Event('cancel', { cancelable: true });
+      if (top.dispatchEvent(event)) top.close();
+    } else if (learning) $('playerBack').click();
+    else window.NativeUI?.home();
+  }
+};
+window.NativeUI?.ready();
