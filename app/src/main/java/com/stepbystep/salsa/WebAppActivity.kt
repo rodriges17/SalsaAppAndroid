@@ -97,6 +97,14 @@ class WebAppActivity : Activity() {
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
         web.webViewClient = object : WebViewClientCompat() {
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                if (request.url.host == "appassets.androidplatform.net") return false
+                if (request.isForMainFrame) {
+                    runCatching { startActivity(Intent(Intent.ACTION_VIEW, request.url)) }
+                    return true
+                }
+                return false
+            }
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
                 assets.shouldInterceptRequest(request.url)
         }
