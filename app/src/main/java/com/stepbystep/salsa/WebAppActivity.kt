@@ -1,6 +1,12 @@
 package com.stepbystep.salsa
 
 import android.app.Activity
+import android.content.ClipData
+import android.util.Base64
+import android.webkit.JavascriptInterface
+import java.io.File
+import java.io.FileOutputStream
+import androidx.core.content.FileProvider
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -18,6 +24,65 @@ class WebAppActivity : Activity() {
     private lateinit var web: WebView
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private val fileRequest = 734
+    private var exportFile: File? = null
+    private var exportStream: FileOutputStream? = null
+    private val exportLock = Any()
+    private inner class AndroidDownloads {
+        @JavascriptInterface fun start(name: String): Boolean {
+            synchronized(exportLock) {
+                if (exportStream != null) return false
+                if (!web.url.orEmpty().startsWith("https://appassets.androidplatform.net/assets/")) return false
+                val safe = name.substringAfterLast('/').substringAfterLast('\\\\').replace(Regex("[^A-Za-z0-9._-]"), "_").take(100).ifBlank { "export.zip" }
+                val dir = File(cacheDir, "exports").apply { mkdirs() }
+                val target = File(dir, "${System.currentTimeMillis()}-$safe")
+                return try { exportFile = target; exportStream = FileOutputStream(target); true }
+                    catch (_: Exception) { false }
+            }
+        }
+        @JavascriptInterface fun chunk(data: String): Boolean {
+            synchronized(exportLock) {
+                val out = exportStream ?: return false
+                return try {
+                    val bytes = Base64.decode(data, Base64.DEFAULT)
+                    if (bytes.size > 262144 || (exportFile?.length() ?: 0) + bytes.size > 300L * 1024 * 1024) {
+                        abort(); false
+                    } else { out.write(bytes); true }
+                } catch (_: Exception) { abort(); false }
+            }
+        }
+        @JavascriptInterface fun finish(mime: String): Boolean {
+            val file = synchronized(exportLock) {
+                val f = exportFile ?: return false
+                try { exportStream?.close() } catch (_: Exception) {}
+                exportStream = null; exportFile = null; f
+            }
+            runOnUiThread {
+                try {
+                    val uri = FileProvider.getUriForFile(this@WebAppActivity, "${packageName}.files", file)
+                    val type = if (mime == "application/zip") mime else "application/octet-stream"
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        this.type = type
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = ClipData.newUri(contentResolver, "Export", uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(send, "ZIP speichern oder teilen"))
+                } catch (_: Exception) {
+                    Toast.makeText(this@WebAppActivity, "Export fehlgeschlagen", Toast.LENGTH_LONG).show()
+                }
+            }
+            return true
+        }
+        @JavascriptInterface fun abort() {
+            synchronized(exportLock) {
+                try { exportStream?.close() } catch (_: Exception) {}
+                exportStream = null
+                exportFile?.delete()
+                exportFile = null
+            }
+        }
+    }
+    private val downloads = AndroidDownloads()
     private val appUrl = "https://appassets.androidplatform.net/assets/index.html"
 
     override fun onCreate(state: Bundle?) {
@@ -66,6 +131,7 @@ class WebAppActivity : Activity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             mediaPlaybackRequiresUserGesture = true
         }
+        web.addJavascriptInterface(downloads, "AndroidDownloads")
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
         web.loadUrl(appUrl)
     }
@@ -99,6 +165,7 @@ class WebAppActivity : Activity() {
     override fun onDestroy() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
+        downloads.abort()
         web.destroy()
         super.onDestroy()
     }
