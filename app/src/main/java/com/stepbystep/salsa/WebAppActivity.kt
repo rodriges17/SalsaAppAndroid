@@ -160,15 +160,23 @@ class WebAppActivity : Activity() {
     }
 
     private fun handleSharedLogin(incoming: Intent?) {
-        if (incoming?.action != Intent.ACTION_SEND || incoming.type != "text/plain") return
-        val text = incoming.getStringExtra(Intent.EXTRA_TEXT) ?: return
-        // Extract only a known HTTPS magic link; never forward arbitrary URLs or tokens.
-        val candidate = Regex("""https://[^\s<>"']+""").find(text)?.value ?: return
+        val candidate = when (incoming?.action) {
+            Intent.ACTION_VIEW -> incoming.dataString
+            Intent.ACTION_SEND -> if (incoming.type == "text/plain") {
+                Regex("""https://[^\\s<>"']+""").find(incoming.getStringExtra(Intent.EXTRA_TEXT).orEmpty())?.value
+            } else null
+            else -> null
+        } ?: return
         val link = runCatching { Uri.parse(candidate.trimEnd('.', ',', ')')) }.getOrNull() ?: return
-        if (link.scheme != "https" || link.host !in setOf("rodriges17.github.io", "tzaprobvauikssnpiucl.supabase.co")) return
-        if (link.getQueryParameter("type") != "magiclink") return
+        if (link.scheme != "https") return
+        val validSource = (link.host == "rodriges17.github.io" &&
+            link.path.orEmpty().startsWith("/SalsaAppCloud/")) ||
+            (link.host == "tzaprobvauikssnpiucl.supabase.co" &&
+            link.path.orEmpty().startsWith("/auth/v1/verify"))
+        if (!validSource || link.getQueryParameter("type") != "magiclink") return
         val token = link.getQueryParameter("token_hash") ?: return
         if (!token.matches(Regex("[A-Za-z0-9_-]{16,512}"))) return
+        // Never open an external origin with the privileged JavaScript bridge.
         web.loadUrl(appUrl + "?token_hash=" + Uri.encode(token) + "&type=magiclink")
     }
 

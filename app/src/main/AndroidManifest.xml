@@ -10,6 +10,18 @@
         <data android:mimeType="text/plain" />
       </intent-filter>
       <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="https" android:host="rodriges17.github.io" android:pathPrefix="/SalsaAppCloud/" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="https" android:host="tzaprobvauikssnpiucl.supabase.co" android:pathPrefix="/auth/v1/verify" />
+      </intent-filter>
+      <intent-filter>
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
