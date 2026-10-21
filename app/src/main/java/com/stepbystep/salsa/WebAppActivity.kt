@@ -149,7 +149,7 @@ class WebAppActivity : Activity() {
         if (incoming?.action != Intent.ACTION_SEND || incoming.type != "text/plain") return
         val text = incoming.getStringExtra(Intent.EXTRA_TEXT) ?: return
         // Extract only a known HTTPS magic link; never forward arbitrary URLs or tokens.
-        val candidate = Regex("""https://[^\\s<>"']+""").find(text)?.value ?: return
+        val candidate = Regex("""https://[^\s<>"']+""").find(text)?.value ?: return
         val link = runCatching { Uri.parse(candidate.trimEnd('.', ',', ')')) }.getOrNull() ?: return
         if (link.scheme != "https" || link.host !in setOf("rodriges17.github.io", "tzaprobvauikssnpiucl.supabase.co")) return
         if (link.getQueryParameter("type") != "magiclink") return
