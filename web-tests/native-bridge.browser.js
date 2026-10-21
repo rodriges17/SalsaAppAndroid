@@ -129,3 +129,14 @@ test('Cloud UI receives shared videos in the original editor and Android back pr
  assert.match(await page.locator('#confirmDialog').innerText(),/Änderungen verwerfen/);
  }finally{await context.close();}
 });
+
+test('Android back closes the focused backup dialog before its underlying settings dialog',async()=>{
+ const {page,context}=await setup();try{
+ await page.locator('#infoButton').click();
+ await page.locator('#restoreBackup').click();
+ assert.equal(await page.locator('#backupDialog').evaluate(e=>e.open),true);
+ await page.evaluate(()=>AndroidAppUI.back());
+ assert.equal(await page.locator('#backupDialog').evaluate(e=>e.open),false);
+ assert.equal(await page.locator('#infoDialog').evaluate(e=>e.open),true);
+ }finally{await context.close();}
+});

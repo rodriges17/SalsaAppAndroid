@@ -585,7 +585,7 @@ window.AndroidAppUI = {
   },
   back() {
     const dialogs = [...document.querySelectorAll('dialog[open]')];
-    const top = dialogs.at(-1);
+    const top = document.activeElement?.closest('dialog[open]') ?? dialogs.at(-1);
     if (top) {
       const event = new Event('cancel', { cancelable: true });
       if (top.dispatchEvent(event)) top.close();
