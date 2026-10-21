@@ -4,7 +4,7 @@
   addEventListener('DOMContentLoaded',()=>{
     document.getElementById('offlineStatus').textContent='Offline bereit · Android';
     document.getElementById('offlineDetails').textContent='Die Oberfläche ist im APK enthalten und startet ohne Internet. Cloud-Funktionen benötigen Internet.';
-    document.getElementById('appVersion').textContent='Step by Step · Android 0.6';
+    document.getElementById('appVersion').textContent='Step by Step · Android 0.7';
     document.querySelector('#persistStorage').textContent='App-Speicher geschützt';
     document.querySelector('#persistStorage').onclick=()=>document.getElementById('persistenceResult').textContent='Android verwaltet den privaten App-Speicher. Eine Deinstallation oder „App-Daten löschen“ entfernt ihn. Nutze Backups.';
     document.addEventListener('click',event=>{

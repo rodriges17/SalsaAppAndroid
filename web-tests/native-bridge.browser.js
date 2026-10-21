@@ -113,3 +113,19 @@ test('Android upgrade retires an old service-worker shell while preserving figur
  const all=await rpc(page,'list');assert.equal(all[0].id,f.id);assert.equal(all[0].status,'Am Üben');const media=await rpc(page,'media',{id:f.id,video:f.videoIds[0]});const bytes=await page.evaluate(t=>NativeMedia.data.get(t).flatMap(b=>Array.from(atob(b),c=>c.charCodeAt(0))),media.token);assert.deepEqual(Buffer.from(bytes),await readFile(new URL('./fixtures/video.mp4',import.meta.url)));
  assert.equal(await page.evaluate(async()=>(await navigator.serviceWorker.getRegistrations()).length),0);assert.ok(!(await page.evaluate(()=>caches.keys())).includes('salsa-trainer:/assets/:obsolete-shell'));
  }finally{await context.close();}});
+
+test('Cloud UI receives shared videos in the original editor and Android back protects unsaved edits',async()=>{
+ const {page,context}=await setup();try{
+ await page.evaluate(()=>{delete window.NativeUI;window.AndroidShell={home(){window.closedByAndroid=true;}};});
+ assert.equal(await page.evaluate(()=>AndroidAppUI.canReceive()),true);
+ await page.evaluate(async url=>AndroidAppUI.receive([{url,name:'Drehung.mp4',type:'video/mp4'},{url,name:'Schritte.mp4',type:'video/mp4'}]),origin+'/fixture.mp4');
+ assert.equal(await page.locator('#editor').evaluate(e=>e.open),true);
+ assert.equal(await page.locator('#draftVideos .draft-card').count(),2);
+ assert.equal(await page.locator('#figureTitle').inputValue(),'Drehung');
+ assert.equal(await page.locator('#saveFigure').isDisabled(),true);
+ await assert.rejects(()=>page.evaluate(()=>AndroidAppUI.receive([{url:'/fixture.mp4',name:'x.mp4',type:'video/mp4'}])),/aktuellen Vorgang/);
+ await page.evaluate(()=>AndroidAppUI.back());
+ await page.waitForFunction(()=>document.querySelector('#confirmDialog')?.open);
+ assert.match(await page.locator('#confirmDialog').innerText(),/Änderungen verwerfen/);
+ }finally{await context.close();}
+});

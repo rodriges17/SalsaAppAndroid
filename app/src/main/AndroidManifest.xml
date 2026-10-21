@@ -4,7 +4,8 @@
   <application android:allowBackup="false" android:icon="@drawable/app_icon" android:label="Step by Step" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true" android:usesCleartextTraffic="false">
     <activity android:name=".MainActivity" android:exported="false" android:screenOrientation="unspecified" />
     <activity android:name=".WebAppActivity" android:exported="false" />
-    <activity android:name=".NativeActivity" android:exported="true" android:launchMode="singleTop" android:configChanges="orientation|screenSize|keyboardHidden" android:screenOrientation="unspecified">
+    <activity android:name=".NativeActivity" android:exported="false" />
+    <activity android:name=".CloudUiActivity" android:exported="true" android:launchMode="singleTop" android:configChanges="orientation|screenSize|keyboardHidden" android:screenOrientation="unspecified">
       <intent-filter>
         <action android:name="android.intent.action.SEND" />
         <category android:name="android.intent.category.DEFAULT" />

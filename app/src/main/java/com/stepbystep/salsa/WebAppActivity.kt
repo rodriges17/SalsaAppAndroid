@@ -462,6 +462,12 @@ open class WebAppActivity : Activity() {
         fullscreenCallback = null
     }
 
+    protected fun closeFullscreenIfOpen(): Boolean {
+        if (fullscreenView == null) return false
+        closeFullscreen()
+        return true
+    }
+
     @Deprecated("Android navigation")
     override fun onBackPressed() {
         if (fullscreenView != null) closeFullscreen()

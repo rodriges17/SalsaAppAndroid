@@ -548,6 +548,31 @@ await refresh();
 
 // Android shell routes advanced workflows through the same controllers as the PWA.
 window.AndroidAppUI = {
+  canReceive() {
+    return !editor && !opening && !learning && !sharing && !packageImport && !deviceBusy && !document.querySelector('dialog[open]');
+  },
+  async openLibrary(library) { await openCloud(null, library); },
+  async receive(items) {
+    if (!this.canReceive()) throw new Error('Bitte zuerst den aktuellen Vorgang abschließen und erneut teilen.');
+    if (!items.length || items.length > 100) throw new Error('Bitte 1 bis 100 Dateien teilen.');
+    const videos = items.every(f => f.type.startsWith('video/'));
+    const backup = items.every(f => /\.salsabackup$/i.test(f.name));
+    if (!videos && !backup && (items.length !== 1 || !/\.zip$/i.test(items[0].name))) throw new Error('Bitte Videos, eine Figuren-ZIP oder zusammengehörige Sicherungsteile teilen.');
+    // Read the same-origin, temporary Android document URLs through the regular PWA inputs.
+    const data = new DataTransfer();
+    for (const item of items) {
+      const response = await fetch(item.url);
+      if (!response.ok) throw new Error('Geteilte Datei nicht lesbar.');
+      data.items.add(new File([await response.blob()], item.name, { type: item.type }));
+    }
+    if (!this.canReceive()) throw new Error('Bitte zuerst den aktuellen Vorgang abschließen und erneut teilen.');
+    let input;
+    if (videos) { await openEditor(); input = $('videoFiles'); }
+    else if (backup) { $('restoreBackup').click(); input = document.querySelector('#backupBody input[type="file"]'); }
+    else input = $('packageFile');
+    input.files = data.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  },
   async show(action, key = null) {
     await refresh();
     const f = key ? figures.find(f => f.id === key.id && (f.storageFolder ?? null) === (key.storageFolder ?? null)) : null;
@@ -565,7 +590,8 @@ window.AndroidAppUI = {
       const event = new Event('cancel', { cancelable: true });
       if (top.dispatchEvent(event)) top.close();
     } else if (learning) $('playerBack').click();
-    else window.NativeUI?.home();
+    else (window.AndroidShell ?? window.NativeUI)?.home();
   }
 };
 window.NativeUI?.ready();
+window.AndroidShell?.ready();
