@@ -141,7 +141,27 @@ class WebAppActivity : Activity() {
         }
         web.addJavascriptInterface(downloads, "AndroidDownloads")
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
-        web.loadUrl(appUrl)
+        handleSharedLogin(intent)
+        if (web.url.isNullOrEmpty()) web.loadUrl(appUrl)
+    }
+
+    private fun handleSharedLogin(incoming: Intent?) {
+        if (incoming?.action != Intent.ACTION_SEND || incoming.type != "text/plain") return
+        val text = incoming.getStringExtra(Intent.EXTRA_TEXT) ?: return
+        // Extract only a known HTTPS magic link; never forward arbitrary URLs or tokens.
+        val candidate = Regex("""https://[^\\s<>"']+""").find(text)?.value ?: return
+        val link = runCatching { Uri.parse(candidate.trimEnd('.', ',', ')')) }.getOrNull() ?: return
+        if (link.scheme != "https" || link.host !in setOf("rodriges17.github.io", "tzaprobvauikssnpiucl.supabase.co")) return
+        if (link.getQueryParameter("type") != "magiclink") return
+        val token = link.getQueryParameter("token_hash") ?: return
+        if (!token.matches(Regex("[A-Za-z0-9_-]{16,512}"))) return
+        web.loadUrl(appUrl + "?token_hash=" + Uri.encode(token) + "&type=magiclink")
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleSharedLogin(intent)
     }
 
     @Deprecated("Android system file selection")
