@@ -79,7 +79,7 @@ function renderOverview() {
     function showMenu() {
       options.setAttribute('aria-expanded', 'true'); const menu = el('div', 'card-menu');
       menu.append(button('In Cloud veröffentlichen', () => { closeMenus(); openCloud(figure); }), button('Figur teilen', () => { closeMenus(); openShare(figure); }), button('Bearbeiten', () => { closeMenus(); openEditor(figure); }), button('Löschen', async () => {
-        closeMenus(); const accepted = await confirmAction({ title: `„${figure.title}“ löschen?`, message: 'Die Figur und alle zugehörigen verwalteten Videos werden gelöscht, auch Dateien im Geräteordner. Deine ursprünglichen Importdateien bleiben erhalten.', ok: 'Löschen' });
+        closeMenus(); const accepted = await confirmAction({ title: `„${figure.title}“ löschen?`, message: (figure.storageFolder ? 'Die Figur und ihre zugehörigen Videos werden aus dem verknüpften Geräteordner gelöscht.' : 'Die Figur und ihre zugehörigen Videos werden aus dem App-Speicher gelöscht.') + ' Deine ursprünglichen Importdateien bleiben erhalten.', ok: 'Löschen' });
         if (accepted) { try { await deleteFigure(figure); changed(); await refresh(); toast('Figur gelöscht.'); } catch (error) { toast(storageMessage(error)); await refresh(); } }
       }, 'danger'));
       if (figure.storageFolder || folderSupported()) menu.append(button(figure.storageFolder ? 'In App-Speicher übertragen' : 'In Geräteordner übertragen', () => { closeMenus(); moveFigure(figure); }));
