@@ -10,8 +10,19 @@ android {
         minSdk = 26
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 9
-        versionName = "0.7.2"
+        versionCode = providers.gradleProperty("stepVersionCode").map { it.toInt() }.getOrElse(10)
+        versionName = "0.7.3"
+    }
+    // Distribution builds use an explicitly restored key. Local/emulator-only debug builds
+    // retain Android's normal debug identity and are never published by the workflow.
+    System.getenv("STEPBYSTEP_SIGNING_STORE")?.let { path ->
+        signingConfigs.getByName("debug") {
+            storeFile = file(path)
+            storePassword = System.getenv("STEPBYSTEP_SIGNING_PASSWORD")
+                ?: error("Missing distribution signing password")
+            keyAlias = "stepbystep"
+            keyPassword = storePassword
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

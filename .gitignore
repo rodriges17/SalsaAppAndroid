@@ -8,3 +8,11 @@ local.properties
 *.aab
 
 node_modules/
+
+*.keystore
+*.jks
+*.p12
+signing.properties
+
+__pycache__/
+*.pyc

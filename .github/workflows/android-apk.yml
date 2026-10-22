@@ -15,11 +15,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Keep debug signing identity for future updates
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: stepbystep-android-debug-signing-v1
       - name: Install Android SDK Platform 35
         run: yes | sdkmanager 'platforms;android-35' 'build-tools;35.0.0' || true
       - uses: gradle/actions/setup-gradle@v4
@@ -28,15 +23,49 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Verify signing restoration and fail-closed behavior
+        run: python3 -m unittest discover -s tools -p test_signing.py
       - name: Verify shared PWA storage and exchange formats
         run: npm test
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Verify Android bridge in Chromium
         run: npm run test:bridge
-      - name: Compile Android Debug APK
-        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      - name: Restore and verify permanent distribution signing key
+        if: github.event_name != 'pull_request'
+        env:
+          STEPBYSTEP_SIGNING_KEYSTORE_BASE64: ${{ secrets.STEPBYSTEP_SIGNING_KEYSTORE_BASE64 }}
+          STEPBYSTEP_SIGNING_PASSWORD: ${{ secrets.STEPBYSTEP_SIGNING_PASSWORD }}
+          STEPBYSTEP_SIGNING_CERT_SHA256: ${{ vars.STEPBYSTEP_SIGNING_CERT_SHA256 }}
+        run: python3 tools/prepare-signing.py
+      - name: Compile Android APK and an earlier-version update fixture
+        env:
+          STEPBYSTEP_SIGNING_PASSWORD: ${{ secrets.STEPBYSTEP_SIGNING_PASSWORD }}
+        run: |
+          if [ "${{ github.event_name }}" != 'pull_request' ]; then
+            test -n "$STEPBYSTEP_SIGNING_STORE"
+            gradle --no-daemon :app:assembleDebug -PstepVersionCode=9
+            mkdir -p "$RUNNER_TEMP/signing-upgrade"
+            cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/signing-upgrade/upgrade-baseline.apk"
+          fi
+          gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      - name: Verify both APK signatures against the permanent certificate
+        if: github.event_name != 'pull_request'
+        env:
+          STEPBYSTEP_SIGNING_CERT_SHA256: ${{ vars.STEPBYSTEP_SIGNING_CERT_SHA256 }}
+        run: python3 tools/verify-apk-signing.py "$RUNNER_TEMP/signing-upgrade/upgrade-baseline.apk" app/build/outputs/apk/debug/app-debug.apk
+      - name: Remove temporary private signing material
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/stepbystep-signing"
       - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: signing-upgrade-fixture
+          path: ${{ runner.temp }}/signing-upgrade/upgrade-baseline.apk
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
         with:
           name: StepByStep-Android-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
@@ -60,14 +89,26 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - uses: actions/download-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: StepByStep-Android-debug-apk
+          path: ${{ runner.temp }}/distribution-apk
+      - uses: actions/download-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: signing-upgrade-fixture
+          path: ${{ runner.temp }}/signing-upgrade
       - uses: reactivecircus/android-emulator-runner@v2
+        env:
+          STEPBYSTEP_VERIFY_UPGRADE: ${{ github.event_name != 'pull_request' }}
         with:
           api-level: 35
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072 -cores 2
           disable-animations: true
-          script: bash tools/run-native-ui-tests.sh
+          script: bash tools/run-signed-native-tests.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
