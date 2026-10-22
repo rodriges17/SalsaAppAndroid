@@ -579,7 +579,10 @@ class NativeActivity : WebAppActivity() {
                     5 ->
                         AlertDialog.Builder(this)
                             .setMessage(
-                                "Figur und verwaltete Videos löschen? Originaldateien bleiben erhalten."
+                                (if (!f.isNull("storageFolder") && f.optString("storageFolder").isNotEmpty())
+                                    "Die Figur und ihre zugehörigen Videos werden aus dem verknüpften Geräteordner gelöscht."
+                                else "Die Figur und ihre zugehörigen Videos werden aus dem App-Speicher gelöscht.") +
+                                    " Deine ursprünglichen Importdateien bleiben erhalten."
                             )
                             .setNegativeButton("Abbrechen", null)
                             .setPositiveButton("Löschen") { _, _ ->

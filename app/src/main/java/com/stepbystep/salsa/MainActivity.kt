@@ -153,7 +153,7 @@ class MainActivity : Activity() {
                         when (which) {
                             0 -> showPlayer(f)
                             1 -> editFigure(f)
-                            2 -> AlertDialog.Builder(this).setMessage("„${f.title}“ löschen?")
+                            2 -> AlertDialog.Builder(this).setTitle("„${f.title}“ löschen?").setMessage("Die Figur wird aus dem App-Speicher gelöscht. Deine ursprünglichen Videodateien bleiben erhalten.")
                                 .setNegativeButton("Abbrechen", null)
                                 .setPositiveButton("Löschen") { _, _ -> figures.remove(f); save(); showOverview() }.show()
                         }
