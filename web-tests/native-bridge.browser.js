@@ -183,3 +183,41 @@ test('last figure menu opens above its trigger and keeps every action above the 
  assert.equal(await page.locator('#editor').evaluate(e=>e.open),true);
  }finally{await context.close();}
 });
+
+test('folder player opens before media is read, loads only selected videos and ignores late selections',async()=>{
+ const {page,context}=await setup();try{
+ const draft=await rpc(page,'edit');await add(page,draft,'Erstes');const videos=await add(page,draft,'Zweites');
+ const f=await rpc(page,'save',{token:draft.token,title:'Ordnertraining',description:'',status:'Neu',tags:[],videos});
+ const folder=(await rpc(page,'folder',{action:'choose'})).activeFolder;
+ const copy=await rpc(page,'transfer',{id:f.id,target:folder});
+ await page.evaluate(()=>AndroidAppUI.show('overview'));
+ await page.evaluate(()=>{const original=window.fetch;window.videoReads=[];window.pendingReads=[];window.holdReads=true;window.fetch=async(...args)=>{if(String(args[0]).includes('/mock/')&&decodeURIComponent(String(args[0])).includes('/media/')){window.videoReads.push(String(args[0]));if(window.holdReads)await new Promise(r=>window.pendingReads.push(r));}return original(...args);};});
+ await page.locator(`[data-figure-id="${copy.id}"] .card-main`).click();
+ await page.waitForFunction(()=>window.videoReads.length===1);
+ assert.equal(await page.locator('#playerScreen').evaluate(e=>e.hidden),false);
+ await page.locator('#playerVideoChoice').selectOption('1');
+ await page.waitForFunction(()=>window.videoReads.length===2);
+ await page.evaluate(()=>window.pendingReads[1]());
+ await page.waitForFunction(()=>document.querySelector('#learningVideo').readyState>=2);
+ const second=await page.locator('#learningVideo').getAttribute('src');
+ await page.evaluate(()=>window.pendingReads[0]());
+ await page.waitForTimeout(100);
+ assert.equal(await page.locator('#learningVideo').getAttribute('src'),second);
+ await page.locator('#playerVideoChoice').selectOption('0');
+ await page.waitForFunction(()=>document.querySelector('#learningVideo').readyState>=2);
+ assert.equal(await page.evaluate(()=>window.videoReads.length),2,'switching back must reuse the verified video');
+ await page.evaluate(()=>AndroidAppUI.back());
+ await page.waitForFunction(()=>document.querySelector('#playerScreen').hidden);
+ await page.evaluate(async()=>{
+   window.holdReads=false;
+   const url=window.videoReads[0],path=decodeURIComponent(url.split('/mock/')[1]);
+   const bytes=new Uint8Array(await(await fetch(url)).arrayBuffer());bytes[bytes.length-1]^=1;
+   const call=a=>JSON.parse(AndroidFiles.call(JSON.stringify(a))).value;
+   const token=call({op:'begin',root:'grant',path});
+   call({op:'write',token,data:btoa(String.fromCharCode(...bytes))});call({op:'close',token});
+ });
+ await page.locator(`[data-figure-id="${copy.id}"] .card-main`).click();
+ await page.waitForFunction(()=>document.querySelector('#playerError').textContent.includes('verändert'));
+ assert.equal(await page.locator('#learningVideo').getAttribute('src'),null,'changed bytes must not be played after reopening');
+ }finally{await context.close();}
+});
