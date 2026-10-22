@@ -188,7 +188,9 @@ open class WebAppActivity : Activity() {
                 insets.systemWindowInsetRight,
                 insets.systemWindowInsetBottom,
             )
-            insets
+            // Do not pass the same system bars to WebView as another safe-area inset.
+            if (android.os.Build.VERSION.SDK_INT >= 30) android.view.WindowInsets.CONSUMED
+            else insets.consumeSystemWindowInsets()
         }
         nativeFiles =
             NativeFiles(this) { source -> runOnUiThread { web.evaluateJavascript(source, null) } }

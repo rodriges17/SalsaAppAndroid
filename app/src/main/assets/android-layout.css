@@ -1,0 +1,6 @@
+/* Android shell layout: keep both heading rows visible while the library scrolls. */
+.overview > .heading{position:sticky;top:0;z-index:6}
+.page-intro{top:var(--brand-header-height,73px)}
+/* Insets are handled once by the Android container, outside the WebView. */
+.bottom-nav{padding-top:4px;padding-bottom:4px}
+.bottom-nav button{min-height:48px;gap:2px;padding:3px}

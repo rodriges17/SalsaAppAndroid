@@ -1,4 +1,4 @@
-# Step by Step – Android 0.7
+# Step by Step – Android 0.7.1
 
 Android-App ab Android 8 (API 26) mit derselben Oberfläche wie SalsaAppCloud: identische Seiten, Navigation, Karten, Dialoge und Hell-/Dunkeldesign. Die Oberfläche ist lokal im APK enthalten; eine Internetverbindung ist nur für Cloud-Inhalte erforderlich.
 
@@ -15,7 +15,7 @@ Android-App ab Android 8 (API 26) mit derselben Oberfläche wie SalsaAppCloud: i
 
 ## Architektur und bestehende Daten
 
-`CloudUiActivity` startet die originale, lokal gebündelte SalsaAppCloud-Oberfläche in einer Android-WebView. Layout, Styles, Icons und Bedienabläufe entsprechen SalsaAppCloud (Referenzstand `648144142c8abd3563991119fdb09a7f4f56afb3`). Android-Brücken ergänzen Dateiauswahl, dauerhaft verbundene Ordner, Speichern/Teilen, Bildschirmrotation und Vollbild. Die bisherigen Kotlin-Ansichten bleiben intern für die bestehenden Regressionstests erhalten, sind aber nicht mehr der App-Startbildschirm. Bestehende Android-Daten werden weiter unter `https://appassets.androidplatform.net/assets/` verwendet.
+`CloudUiActivity` startet die originale, lokal gebündelte SalsaAppCloud-Oberfläche in einer Android-WebView. Layout, Styles, Icons und Bedienabläufe entsprechen SalsaAppCloud (Referenzstand `648144142c8abd3563991119fdb09a7f4f56afb3`). Eine separate Android-Layoutdatei fixiert die Kopfzeilen beim Scrollen und hält die kompakte Navigation bündig am unteren Rand; Systemabstände werden nur einmal vom Android-Container berücksichtigt. Android-Brücken ergänzen Dateiauswahl, dauerhaft verbundene Ordner, Speichern/Teilen, Bildschirmrotation und Vollbild. Die bisherigen Kotlin-Ansichten bleiben intern für die bestehenden Regressionstests erhalten, sind aber nicht mehr der App-Startbildschirm. Bestehende Android-Daten werden weiter unter `https://appassets.androidplatform.net/assets/` verwendet.
 
 Ein Startschritt außerhalb des alten Service-Worker-Bereichs entfernt veraltete Android-App-Shells. Figuren, Medien-Caches und Ordnerberechtigungen bleiben dabei erhalten; ein Integrationstest prüft diesen Updatefall.
 

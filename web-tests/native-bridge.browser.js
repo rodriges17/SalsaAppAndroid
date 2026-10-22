@@ -140,3 +140,23 @@ test('Android back closes the focused backup dialog before its underlying settin
  assert.equal(await page.locator('#infoDialog').evaluate(e=>e.open),true);
  }finally{await context.close();}
 });
+
+test('Android header stays visible while scrolling and compact navigation meets the viewport bottom',async()=>{
+ const {page,context}=await setup();try{
+ await page.setViewportSize({width:390,height:844});
+ await page.evaluate(()=>{const list=document.querySelector('#figureList');for(let i=0;i<25;i++){const card=document.createElement('article');card.className='figure-card';card.textContent='Figur '+i;card.style.minHeight='100px';list.append(card);}});
+ const before=await page.locator('.overview > .heading').boundingBox();
+ await page.evaluate(()=>window.scrollTo(0,800));
+ await page.waitForTimeout(100);
+ const header=await page.locator('.overview > .heading').boundingBox();
+ const intro=await page.locator('.page-intro').boundingBox();
+ const nav=await page.locator('body > .bottom-nav').boundingBox();
+ assert.equal(header.y,0);assert.equal(header.height,before.height);
+ assert.ok(Math.abs(intro.y-header.height)<1,'heading rows must not overlap');
+ assert.equal(nav.y+nav.height,844);assert.ok(nav.height<=60,'navigation should be compact');
+ await page.setViewportSize({width:844,height:390});
+ await page.waitForTimeout(100);
+ const landscape=await page.locator('body > .bottom-nav').boundingBox();
+ assert.equal(landscape.y+landscape.height,390);
+ }finally{await context.close();}
+});
