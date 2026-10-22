@@ -1,4 +1,4 @@
-# Step by Step – Android 0.7.8
+# Step by Step – Android 0.7.9
 
 Android-App ab Android 8 (API 26) mit derselben Oberfläche wie SalsaAppCloud: identische Seiten, Navigation, Karten, Dialoge und Hell-/Dunkeldesign. Die Oberfläche ist lokal im APK enthalten; eine Internetverbindung ist nur für Cloud-Inhalte erforderlich.
 
@@ -69,3 +69,5 @@ Der aktuelle CI-Lauf ist die Quelle für tatsächliche Testergebnisse. Physische
 - `app/src/main/assets/`: PWA-Module und Android-Adapter. Webstand: SalsaAppCloud vom 21.10.2026, ergänzt um Android-Integrationen.
 
 Geräteordner-Videos werden im Lernplayer einzeln bei Auswahl geladen und weiterhin vor der Wiedergabe auf Originalgröße und CRC geprüft. Bereits in diesem Player geladene Videos werden beim Zurückwechseln wiederverwendet; beim erneuten Öffnen der Figur erfolgt eine neue Prüfung. Export, Bearbeitung und Backup prüfen weiterhin alle benötigten Originaldateien.
+
+Eigene Cloud-Figuren lassen sich mit „Lokal übernehmen“ direkt und ohne Bibliothekszuordnung herunterladen. Neueste Version und ältere Versionen unterstützen Videoauswahl und bestätigte Vorschau. Bereits übernommene Auswahlen werden als lokal vorhanden markiert; bei passenden lokalen Figuren stehen Ersetzen, separate Kopie und Abbrechen zur Wahl. Ersetzen behält Lernstatus und Speicherort und schreibt erst nach dem Speichern.
