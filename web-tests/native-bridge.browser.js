@@ -160,3 +160,26 @@ test('Android header stays visible while scrolling and compact navigation meets 
  assert.equal(landscape.y+landscape.height,390);
  }finally{await context.close();}
 });
+
+test('last figure menu opens above its trigger and keeps every action above the footer',async()=>{
+ const {page,context}=await setup();try{
+ await page.setViewportSize({width:390,height:844});
+ await create(page,'Unterste Figur');
+ await page.evaluate(()=>AndroidAppUI.show('overview'));
+ await page.evaluate(()=>{const card=document.querySelector('.figure-card');card.style.marginTop='600px';window.scrollTo(0,document.body.scrollHeight);});
+ await page.locator('.card-options').click();
+ const menu=await page.locator('.card-menu').boundingBox();
+ const trigger=await page.locator('.card-options').boundingBox();
+ const footer=await page.locator('body > .bottom-nav').boundingBox();
+ const header=await page.locator('.page-intro').boundingBox();
+ assert.ok(menu.y+menu.height<=trigger.y,'last-card menu must open upward');
+ assert.ok(menu.y>=header.y+header.height,'menu must clear the fixed header');
+ assert.ok(menu.y+menu.height<footer.y,'menu must clear navigation');
+ await page.evaluate(()=>AndroidAppUI.back());
+ assert.equal(await page.locator('.card-menu').count(),0);
+ await page.locator('.card-options').click();
+ await page.getByRole('button',{name:'Bearbeiten',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('#editor').open);
+ assert.equal(await page.locator('#editor').evaluate(e=>e.open),true);
+ }finally{await context.close();}
+});

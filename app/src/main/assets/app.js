@@ -34,6 +34,23 @@ function confirmAction({ title, message = '', ok = 'Bestätigen', cancel = 'Abbr
     $('confirmDialog').showModal(); $('confirmCancel').focus();
   });
 }
+function placeFigureMenu(menu, anchor) {
+  const margin = 8;
+  const header = document.querySelector('.page-intro')?.getBoundingClientRect();
+  const footer = document.querySelector('body > .bottom-nav')?.getBoundingClientRect();
+  const top = Math.max(margin, (header?.bottom ?? 0) + margin);
+  const bottom = Math.min(window.innerHeight, footer?.top ?? window.innerHeight) - margin;
+  menu.style.maxHeight = `${Math.max(44, bottom - top)}px`;
+  const size = menu.getBoundingClientRect();
+  const trigger = anchor.getBoundingClientRect();
+  const below = trigger.bottom + margin;
+  const y = below + size.height <= bottom ? below : trigger.top - size.height - margin;
+  menu.style.top = `${Math.max(top, Math.min(y, bottom - size.height))}px`;
+  menu.style.left = `${Math.max(margin, Math.min(trigger.right - size.width, window.innerWidth - size.width - margin))}px`;
+  menu.style.right = 'auto';
+}
+window.addEventListener('scroll', () => closeMenus(), { passive: true });
+window.addEventListener('resize', () => closeMenus());
 function closeMenus() { document.querySelectorAll('.card-menu').forEach(n => n.remove()); document.querySelectorAll('.card-options').forEach(n => n.setAttribute('aria-expanded', 'false')); }
 async function refresh() {
   try { figures = await listFigures(); renderOverview(); }
@@ -67,6 +84,7 @@ function renderOverview() {
       }, 'danger'));
       if (figure.storageFolder || folderSupported()) menu.append(button(figure.storageFolder ? 'In App-Speicher übertragen' : 'In Geräteordner übertragen', () => { closeMenus(); moveFigure(figure); }));
       card.append(menu);
+      placeFigureMenu(menu, options);
     }
     main.addEventListener('contextmenu', event => { event.preventDefault(); closeMenus(); showMenu(); });
     card.append(main, options);
@@ -584,6 +602,7 @@ window.AndroidAppUI = {
     else if (action === 'import') $('importFigure').click();
   },
   back() {
+    if (document.querySelector('.card-menu')) { closeMenus(); return; }
     const dialogs = [...document.querySelectorAll('dialog[open]')];
     const top = document.activeElement?.closest('dialog[open]') ?? dialogs.at(-1);
     if (top) {

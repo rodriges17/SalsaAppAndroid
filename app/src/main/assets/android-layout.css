@@ -4,3 +4,6 @@
 /* Insets are handled once by the Android container, outside the WebView. */
 .bottom-nav{padding-top:4px;padding-bottom:4px}
 .bottom-nav button{min-height:48px;gap:2px;padding:3px}
+/* Menus stay inside the usable area above the navigation, including the last card. */
+.card-menu{position:fixed;z-index:7;max-width:calc(100vw - 16px);overflow-y:auto;overscroll-behavior:contain}
+.card-menu button{max-width:100%;overflow-wrap:anywhere}
