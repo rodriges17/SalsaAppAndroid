@@ -254,3 +254,13 @@ test('Android shows the saving message and activity indicator while video storag
  assert.equal(await page.getByRole('button',{name:'Speichertest lernen',exact:true}).count(),1);
  }finally{await context.close();}
 });
+
+// Shared contract is byte-for-byte identical to the PWA's contract.
+const {PARITY_CASES,runParityCase}=await import('./parity-cases.js');
+for(const scenario of PARITY_CASES)test('shared feature contract: '+scenario,async()=>{
+ const {page,context}=await setup();try{
+  const errors=[];page.on('console',m=>{if(m.type()==='error'&&m.text().includes('Content Security Policy'))errors.push(m.text());});
+  await page.reload();await page.waitForFunction(()=>window.nativeReady);await page.evaluate(()=>document.fonts.ready);
+  await runParityCase(page,{root:'/',fixture:'/fixture.mp4',native:true,scenario,consoleErrors:errors});
+ }finally{await context.close();}
+});

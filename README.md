@@ -1,4 +1,4 @@
-# Step by Step – Android 0.7.10
+# Step by Step – Android 0.7.11
 
 Android-App ab Android 8 (API 26) mit derselben Oberfläche wie SalsaAppCloud: identische Seiten, Navigation, Karten, Dialoge und Hell-/Dunkeldesign. Die Oberfläche ist lokal im APK enthalten; eine Internetverbindung ist nur für Cloud-Inhalte erforderlich.
 
@@ -77,3 +77,5 @@ Dateien im Geräteordner werden in begrenzten 192-KiB-Blöcken mit effizienterer
 
 Suche und Lernstand-/Tagfilter bleiben beim Scrollen unter dem festen Markenheader und Seitentitel sichtbar. Die Positionen folgen den gemessenen Zeilenhöhen.
 Das abschließende Kopieren in den Android-Geräteordner erfolgt asynchron, damit WebView während des Speicherns weiter zeichnen kann.
+
+Der geprüfte gemeinsame Funktionsumfang und die Plattformadapter sind in [docs/FEATURE-PARITY.md](docs/FEATURE-PARITY.md) beschrieben. Die Regressionen vom 22.10.2026 sind korrigiert: reparierbarer Cloud-Reimport, erreichbare Menüs, kompakte Querformat-Übersicht, synchroner Playerzustand und weniger doppelte Medienprüfung.

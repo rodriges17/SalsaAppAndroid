@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22-saving-v1';
+const APP_VERSION = '2026-10-22-parity-fixes-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
@@ -351,6 +351,8 @@ $('playerVideoChoice').onchange = () => { if (learning) loadPlayerVideo(Number($
 $('fullscreen').onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else if ($('playerScreen').requestFullscreen) await $('playerScreen').requestFullscreen(); else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); else toast('Diese Ansicht nutzt bereits die verfügbare Displayfläche.'); } catch { toast('Vollbild wird von diesem Browser nicht freigegeben.'); } };
 $('playerBack').onclick = () => history.back();
 function closePlayer() {
+  window.stepNativePlayer?.reset();
+  $('playerScreen').classList.remove('is-native-fullscreen');
   ++playerLoad;
   pause(); video.removeAttribute('src'); video.load(); releaseURL(videoURL); videoURL = null; learning = null; loop.clear();
   $('playerScreen').hidden = true; $('overview').hidden = false; $('overview').inert = false; document.body.classList.remove('playing-screen');
@@ -577,9 +579,8 @@ document.querySelectorAll('[data-nav]').forEach(nav => {
 });
 async function chooseCloudImport({ title, fingerprint, revisionIds }) {
   const current = await listFigures();
-  if (current.some(f => f.importFingerprint === fingerprint)) { toast('Diese Cloud-Version ist bereits lokal vorhanden.'); return null; }
   const normalize = value => value.trim().normalize('NFC').toLocaleLowerCase('de');
-  const matches = current.filter(f => normalize(f.title) === normalize(title) || revisionIds.some(id => f.importFingerprint?.startsWith(`cloud:${id}:`)));
+  const matches = current.filter(f => f.importFingerprint === fingerprint || normalize(f.title) === normalize(title) || revisionIds.some(id => f.importFingerprint?.startsWith(`cloud:${id}:`)));
   if (!matches.length) return {};
   const dialog = el('dialog', 'small-dialog'); dialog.id = 'cloudImportConflict';
   const heading = el('h2', '', 'Figur bereits lokal vorhanden'); heading.id = 'cloudImportConflictTitle'; dialog.setAttribute('aria-labelledby', heading.id);
