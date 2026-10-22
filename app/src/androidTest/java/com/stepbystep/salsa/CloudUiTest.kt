@@ -46,7 +46,7 @@ class CloudUiTest {
             if (js(scenario, predicate) == "true") return
             Thread.sleep(100)
         }
-        fail("Cloud UI did not reach: $predicate")
+        fail("Cloud UI did not reach: $predicate; diagnostics=" + js(scenario, "JSON.stringify({url:location.href,error:window.physicalPlayerError,seeded:window.physicalPlayerSeeded,cards:document.querySelectorAll('.figure-card').length})"))
     }
 
     @Test
@@ -94,7 +94,7 @@ class CloudUiTest {
             await(scenario, "!!window.AndroidAppUI")
             js(scenario, """
                 (async()=>{
-                  const storage=await import('./storage.js');
+                  const storage=await import(new URL('./storage.js',location.href).href);
                   const bytes=Uint8Array.from(atob($encoded),c=>c.charCodeAt(0));
                   const id='physical-player-'+crypto.randomUUID();window.physicalPlayerId=id;
                   await storage.saveFigure({id,title:'Physical Player Test',description:'Player description',tags:[],status:'Neu'},[{id:crypto.randomUUID(),name:'Video',blob:new Blob([bytes],{type:'video/mp4'}),confirmed:true,duration:1,width:160,height:240}]);
@@ -117,7 +117,7 @@ class CloudUiTest {
             assertEquals("true",js(scenario,"getComputedStyle(document.querySelector('#playerScreen .bottom-nav')).display==='none'"))
             js(scenario, "window.AndroidAppUI.back()")
             await(scenario, "document.querySelector('#playerScreen').hidden && !document.querySelector('#playerScreen').classList.contains('is-native-fullscreen') && innerHeight>innerWidth")
-            js(scenario, "(async()=>{const s=await import('./storage.js');const f=(await s.listFigures()).find(f=>f.id===window.physicalPlayerId);if(f)await s.deleteFigure(f);window.physicalPlayerCleaned=true;})()")
+            js(scenario, "(async()=>{const s=await import(new URL('./storage.js',location.href).href);const f=(await s.listFigures()).find(f=>f.id===window.physicalPlayerId);if(f)await s.deleteFigure(f);window.physicalPlayerCleaned=true;})()")
             await(scenario, "!!window.physicalPlayerCleaned")
         }
     }
