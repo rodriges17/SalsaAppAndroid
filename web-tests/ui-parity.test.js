@@ -1,4 +1,4 @@
-// SalsaAppCloud UI reference: d674b65f993f0023529bdee6e6dd4d16ef84fea1.
+// SalsaAppCloud UI reference: add329f98501df6b9c7d4a9def49d6642e8dab98.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -7,8 +7,8 @@ const hash = text => createHash('sha256').update(text).digest('hex');
 test('Android uses the original SalsaAppCloud layout and stylesheet', async () => {
  const root = new URL('../app/src/main/assets/', import.meta.url);
  const html = await readFile(new URL('index.html', root), 'utf8');
- assert.equal(hash(html.slice(html.indexOf('<body>'))), '854c665366de616ff29e2068b9aa7fb06cfe5b8649e4824ac15d1cc51a2486eb');
- assert.equal(hash(await readFile(new URL('styles.css', root))), '92fd4ab9a50386371e685acb582b228851ff6c2b75ee63a4fe0c4c245c60c15c');
+ assert.equal(hash(html.slice(html.indexOf('<body>'))), '8b3c0a3bd3c8c8dc5a5485a21ccae92838b45a60548c417b8308bd2937bf4881');
+ assert.equal(hash(await readFile(new URL('styles.css', root))), '47e085a2d25029bf0759825219f0ba8a987aadf6a2bf6a9e2fda00a8adcaae85');
  const manifest = await readFile(new URL('../app/src/main/AndroidManifest.xml', import.meta.url), 'utf8');
  assert.match(manifest, /name=".CloudUiActivity" android:exported="true"/);
 });

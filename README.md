@@ -1,4 +1,4 @@
-# Step by Step – Android 0.7.9
+# Step by Step – Android 0.7.10
 
 Android-App ab Android 8 (API 26) mit derselben Oberfläche wie SalsaAppCloud: identische Seiten, Navigation, Karten, Dialoge und Hell-/Dunkeldesign. Die Oberfläche ist lokal im APK enthalten; eine Internetverbindung ist nur für Cloud-Inhalte erforderlich.
 
@@ -71,3 +71,9 @@ Der aktuelle CI-Lauf ist die Quelle für tatsächliche Testergebnisse. Physische
 Geräteordner-Videos werden im Lernplayer einzeln bei Auswahl geladen und weiterhin vor der Wiedergabe auf Originalgröße und CRC geprüft. Bereits in diesem Player geladene Videos werden beim Zurückwechseln wiederverwendet; beim erneuten Öffnen der Figur erfolgt eine neue Prüfung. Export, Bearbeitung und Backup prüfen weiterhin alle benötigten Originaldateien.
 
 Eigene Cloud-Figuren lassen sich mit „Lokal übernehmen“ direkt und ohne Bibliothekszuordnung herunterladen. Neueste Version und ältere Versionen unterstützen Videoauswahl und bestätigte Vorschau. Bereits übernommene Auswahlen werden als lokal vorhanden markiert; bei passenden lokalen Figuren stehen Ersetzen, separate Kopie und Abbrechen zur Wahl. Ersetzen behält Lernstatus und Speicherort und schreibt erst nach dem Speichern.
+
+Beim lokalen Speichern werden Prüfsummen mit einer schnelleren indizierten Schleife berechnet. Der Speicherstatus und ein unbestimmter Fortschrittsbalken werden vor dem Kopieren sichtbar. Videokopien werden weiterhin vollständig geprüft.
+Dateien im Geräteordner werden in begrenzten 192-KiB-Blöcken mit effizienterer Base64-Kodierung übertragen; die Oberfläche erhält während längerer Übertragungen regelmäßig Rechenzeit.
+
+Suche und Lernstand-/Tagfilter bleiben beim Scrollen unter dem festen Markenheader und Seitentitel sichtbar. Die Positionen folgen den gemessenen Zeilenhöhen.
+Das abschließende Kopieren in den Android-Geräteordner erfolgt asynchron, damit WebView während des Speicherns weiter zeichnen kann.

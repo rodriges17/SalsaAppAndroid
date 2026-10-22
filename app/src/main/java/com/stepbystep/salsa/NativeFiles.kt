@@ -215,7 +215,7 @@ class NativeFiles(private val activity: Activity, private val script: (String) -
                     "write" -> {
                         val w = writers[a.getString("token")] ?: error("Schreibvorgang fehlt")
                         val bytes = Base64.decode(a.getString("data"), Base64.DEFAULT)
-                        require(bytes.size <= 65536)
+                        require(bytes.size <= 262144)
                         w.output.write(bytes)
                         true
                     }
@@ -263,6 +263,18 @@ class NativeFiles(private val activity: Activity, private val script: (String) -
         }
     }
 
+    // A complete SAF copy can take seconds. Return immediately to JavaScript so
+    // WebView can keep rendering the saving indicator while the copy finishes.
+    @JavascriptInterface
+    fun closeAsync(token: String, request: String) {
+        Thread {
+                val result = call(JSONObject().put("op", "close").put("token", token).toString())
+                script("window.AndroidFSWriteResult?.(${quote(request)}, $result);")
+            }
+            .start()
+    }
+
+    @Synchronized
     fun close() {
         writers.values.forEach {
             runCatching { it.output.close() }

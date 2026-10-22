@@ -151,6 +151,9 @@ test('Android header stays visible while scrolling and compact navigation meets 
  const header=await page.locator('.overview > .heading').boundingBox();
  const intro=await page.locator('.page-intro').boundingBox();
  const nav=await page.locator('body > .bottom-nav').boundingBox();
+ const filters=await page.locator('.overview-filters').boundingBox();
+ assert.ok(Math.abs(filters.y-intro.y-intro.height)<1,'search and filter row must stay below the intro');
+ assert.equal(await page.locator('#search').isVisible(),true);
  assert.equal(header.y,0);assert.equal(header.height,before.height);
  assert.ok(Math.abs(intro.y-header.height)<1,'heading rows must not overlap');
  assert.equal(nav.y+nav.height,844);assert.ok(nav.height<=60,'navigation should be compact');
@@ -219,5 +222,35 @@ test('folder player opens before media is read, loads only selected videos and i
  await page.locator(`[data-figure-id="${copy.id}"] .card-main`).click();
  await page.waitForFunction(()=>document.querySelector('#playerError').textContent.includes('verändert'));
  assert.equal(await page.locator('#learningVideo').getAttribute('src'),null,'changed bytes must not be played after reopening');
+ }finally{await context.close();}
+});
+
+test('Android folder writes preserve all bytes across larger bridge blocks',async()=>{
+ const {page,context}=await setup();try{
+ const result=await page.evaluate(async()=>{
+  const original=AndroidFiles.call.bind(AndroidFiles),sizes=[];let asynchronous=false;
+  AndroidFiles.closeAsync=(token,id)=>{asynchronous=true;setTimeout(()=>AndroidFSWriteResult(id,JSON.parse(original(JSON.stringify({op:'close',token})))),0);};
+  AndroidFiles.call=raw=>{const a=JSON.parse(raw);if(a.op==='write')sizes.push(atob(a.data).length);return original(raw);};
+  const root=await showDirectoryPicker(),file=await root.getFileHandle('large-test.mp4',{create:true});
+  const expected=Uint8Array.from({length:900017},(_,i)=>i%251),writer=await file.createWritable();
+  await writer.write(new Blob([expected]));await writer.close();
+  const actual=new Uint8Array(await(await file.getFile()).arrayBuffer());
+  return {sizes,asynchronous,length:actual.length,same:actual.every((b,i)=>b===expected[i])};
+ });
+ assert.equal(result.same,true);assert.equal(result.asynchronous,true);assert.equal(result.length,900017);assert.equal(result.sizes.length,5);assert.ok(result.sizes.every(n=>n<=196608));
+ }finally{await context.close();}
+});
+
+test('Android shows the saving message and activity indicator while video storage is pending',async()=>{
+ const {page,context}=await setup();try{
+ await page.evaluate(()=>{delete window.NativeUI;window.AndroidShell={home(){}};});
+ await page.evaluate(async url=>AndroidAppUI.receive([{url,name:'Speichertest.mp4',type:'video/mp4'}]),origin+'/fixture.mp4');
+ await page.locator('#reviewAll').click();await page.waitForFunction(()=>!document.querySelector('#acceptVideo').disabled);await page.locator('#acceptVideo').click();
+ await page.evaluate(()=>{const put=Cache.prototype.put;Cache.prototype.put=async function(request,...args){if(String(request).includes('__private_media__'))await new Promise(resolve=>window.releaseSaving=resolve);return put.call(this,request,...args);};});
+ await page.locator('#saveFigure').click();await page.waitForFunction(()=>!!window.releaseSaving);
+ assert.equal(await page.locator('#saveProgress').innerText(),'Figur inkl. Video(s) werden gespeichert...');assert.equal(await page.locator('#saveIndicator').isVisible(),true);assert.equal(await page.locator('#saveFigure').isDisabled(),true);
+ await page.evaluate(()=>window.releaseSaving());await page.waitForFunction(()=>!document.querySelector('#editor').open);
+ assert.equal(await page.locator('#saveIndicator').isVisible(),false);
+ assert.equal(await page.getByRole('button',{name:'Speichertest lernen',exact:true}).count(),1);
  }finally{await context.close();}
 });
