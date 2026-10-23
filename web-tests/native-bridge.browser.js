@@ -321,3 +321,8 @@ test('legacy native Figur-ZIP passes cancellation through the shared delivery ad
  assert.equal(result.entered,true);assert.equal(result.aborted,true);assert.ok(result.error);
  }finally{await context.close();}
 });
+
+test('bundled media descriptors share the PWA lazy-loading and retry contract',async()=>{const{page,context}=await setup();try{
+ const{mediaContract,expectedMediaContract}=await import('./media-contract.js');
+ assert.deepEqual(await mediaContract(page,'/assets/'),expectedMediaContract);
+ }finally{await context.close();}});
