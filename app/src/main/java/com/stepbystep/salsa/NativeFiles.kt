@@ -79,6 +79,10 @@ class NativeFiles(private val activity: Activity, private val script: (String) -
         return "https://appassets.androidplatform.net/native/import/$id"
     }
 
+    fun unregister(url: String) {
+        imports.remove(url.substringAfterLast('/'))
+    }
+
     fun response(value: String): WebResourceResponse {
         return try {
             val parts = value.split('/', limit = 3)

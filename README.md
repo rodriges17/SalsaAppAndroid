@@ -1,4 +1,4 @@
-# Step by Step – Android 0.7.20
+# Step by Step – Android 0.7.21
 
 Android-App ab Android 8 (API 26) mit derselben Oberfläche wie SalsaAppCloud: identische Seiten, Navigation, Karten, Dialoge und Hell-/Dunkeldesign. Die Oberfläche ist lokal im APK enthalten; eine Internetverbindung ist nur für Cloud-Inhalte erforderlich.
 

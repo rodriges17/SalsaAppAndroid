@@ -619,31 +619,56 @@ try { await cleanupInterruptedImports(); } catch { /* Refresh reports unavailabl
 await refresh();
 
 // Android shell routes advanced workflows through the same controllers as the PWA.
+let incomingPreparation = null;
+const incomingUIAvailable = () => !editor && !opening && !learning && !sharing && !packageImport && !deviceBusy && !document.querySelector('dialog[open]');
 window.AndroidAppUI = {
   canReceive() {
-    return !editor && !opening && !learning && !sharing && !packageImport && !deviceBusy && !document.querySelector('dialog[open]');
+    return !incomingPreparation && incomingUIAvailable();
   },
   async openLibrary(library) { await openCloud(null, library); },
-  async receive(items) {
-    if (!this.canReceive()) throw new Error('Bitte zuerst den aktuellen Vorgang abschließen und erneut teilen.');
-    if (!items.length || items.length > 100) throw new Error('Bitte 1 bis 100 Dateien teilen.');
-    const videos = items.every(f => f.type.startsWith('video/'));
-    const backup = items.every(f => /\.salsabackup$/i.test(f.name));
-    if (!videos && !backup && (items.length !== 1 || !/\.zip$/i.test(items[0].name))) throw new Error('Bitte Videos, eine Figuren-ZIP oder zusammengehörige Sicherungsteile teilen.');
-    // Read the same-origin, temporary Android document URLs through the regular PWA inputs.
-    const data = new DataTransfer();
-    for (const item of items) {
-      const response = await fetch(item.url);
-      if (!response.ok) throw new Error('Geteilte Datei nicht lesbar.');
-      data.items.add(new File([await response.blob()], item.name, { type: item.type }));
-    }
-    if (!this.canReceive()) throw new Error('Bitte zuerst den aktuellen Vorgang abschließen und erneut teilen.');
-    let input;
-    if (videos) { await openEditor(); input = $('videoFiles'); }
-    else if (backup) { $('restoreBackup').click(); input = document.querySelector('#backupBody input[type="file"]'); }
-    else input = $('packageFile');
-    input.files = data.files;
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+  beginReceive(id) {
+    if (!this.canReceive()) return false;
+    incomingPreparation = { id, controller: new AbortController() };
+    return true;
+  },
+  cancelReceive(id) {
+    if (incomingPreparation?.id !== id) return;
+    incomingPreparation.controller.abort();
+    incomingPreparation = null;
+  },
+  async receive(items, id = crypto.randomUUID()) {
+    if (incomingPreparation?.id !== id && !this.beginReceive(id)) throw new Error('Bitte zuerst den aktuellen Vorgang abschließen und erneut teilen.');
+    const preparation = incomingPreparation;
+    if (preparation.started) throw new Error('Diese Übergabe wird bereits vorbereitet.');
+    preparation.started = true;
+    const check = () => { if (incomingPreparation !== preparation || preparation.controller.signal.aborted) throw new DOMException('Abgebrochen', 'AbortError'); };
+    try {
+      if (!items.length || items.length > 100) throw new Error('Bitte 1 bis 100 Dateien teilen.');
+      const videos = items.every(f => f.type.startsWith('video/'));
+      const backup = items.every(f => /\.salsabackup$/i.test(f.name));
+      if (!videos && !backup && (items.length !== 1 || !/\.zip$/i.test(items[0].name))) throw new Error('Bitte Videos, eine Figuren-ZIP oder zusammengehörige Sicherungsteile teilen.');
+      // Read the same-origin, temporary Android document URLs through the regular PWA inputs.
+      const data = new DataTransfer();
+      for (const item of items) {
+        check();
+        const response = await fetch(item.url, { signal: preparation.controller.signal });
+        if (!response.ok) throw new Error('Geteilte Datei nicht lesbar.');
+        const blob = await response.blob();
+        check();
+        data.items.add(new File([blob], item.name, { type: item.type }));
+      }
+      check();
+      if (!incomingUIAvailable()) throw new Error('Bitte zuerst den aktuellen Vorgang abschließen und erneut teilen.');
+      // A queued JS abort alone cannot arbitrate against Android's UI thread.
+      if (window.AndroidIntake && !AndroidIntake.claim(String(id))) throw new DOMException('Abgebrochen', 'AbortError');
+      let input;
+      if (videos) { await openEditor(); input = $('videoFiles'); }
+      else if (backup) { $('restoreBackup').click(); input = document.querySelector('#backupBody input[type="file"]'); }
+      else input = $('packageFile');
+      check();
+      input.files = data.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    } finally { if (incomingPreparation === preparation) incomingPreparation = null; }
   },
   async show(action, key = null) {
     await refresh();
@@ -667,4 +692,5 @@ window.AndroidAppUI = {
   }
 };
 window.NativeUI?.ready();
-window.AndroidShell?.ready();
+window.androidIncomingDocument = crypto.randomUUID();
+window.AndroidShell?.ready(window.androidIncomingDocument);

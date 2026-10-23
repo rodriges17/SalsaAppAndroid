@@ -49,6 +49,88 @@ class CloudUiTest {
         fail("Cloud UI did not reach: $predicate; diagnostics=" + js(scenario, "JSON.stringify({url:location.href,error:window.physicalPlayerError,seeded:window.physicalPlayerSeeded,cards:document.querySelectorAll('.figure-card').length})"))
     }
 
+    private fun shareVideo(name: String): android.content.Intent {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val directory = java.io.File(context.cacheDir, "exports").apply { mkdirs() }
+        val file = java.io.File(directory, name)
+        instrumentation.context.assets.open("video.mp4").use { input -> file.outputStream().use { input.copyTo(it) } }
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+        return android.content.Intent(context, CloudUiActivity::class.java)
+            .setAction(android.content.Intent.ACTION_SEND)
+            .setType("video/mp4")
+            .putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+
+    private fun deliver(scenario: ActivityScenario<CloudUiActivity>, intent: android.content.Intent) {
+        scenario.onActivity { it.startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)) }
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+    }
+
+    @Test
+    fun coldShareIsConsumedOnceAndWarmShareProtectsTheDraft() {
+        val first = shareVideo("Erste Drehung.mp4")
+        ActivityScenario.launch<CloudUiActivity>(first).use { scenario ->
+            await(scenario, "document.querySelectorAll('#draftVideos .draft-card').length === 1")
+            assertEquals(JSONObject.quote("Erste Drehung"), js(scenario, "document.querySelector('#figureTitle').value"))
+            assertEquals("true", js(scenario, "document.querySelector('#saveFigure').disabled"))
+            js(scenario, "AndroidShell.ready(window.androidIncomingDocument);AndroidShell.ready(window.androidIncomingDocument)")
+            js(scenario, "window.intakeChecks=0;window.originalIntakeCheck=AndroidAppUI.beginReceive;AndroidAppUI.beginReceive=function(...args){intakeChecks++;return originalIntakeCheck.apply(this,args)}")
+            deliver(scenario, shareVideo("Zweite Drehung.mp4"))
+            await(scenario, "window.intakeChecks === 1")
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            assertEquals(JSONObject.quote("Erste Drehung"), js(scenario, "document.querySelector('#figureTitle').value"))
+            assertEquals("1", js(scenario, "document.querySelectorAll('#draftVideos .draft-card').length"))
+        }
+    }
+
+    @Test
+    fun preparationCanBeCancelledAndRetriedWithoutALateEditor() {
+        ActivityScenario.launch(CloudUiActivity::class.java).use { scenario ->
+            await(scenario, "!!window.AndroidAppUI")
+            js(scenario, """
+                window.realIncomingFetch=window.fetch;
+                window.fetch=(...args)=>args[0].includes('/native/import/') ? new Promise((resolve,reject)=>{
+                  window.incomingReadStarted=true;
+                  args[1].signal.addEventListener('abort',()=>reject(new DOMException('Abgebrochen','AbortError')),{once:true});
+                }) : window.realIncomingFetch(...args);
+            """.trimIndent())
+            deliver(scenario, shareVideo("Abbruch.mp4"))
+            await(scenario, "window.incomingReadStarted === true")
+            val device = androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+            val cancel = device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.res("android:id/button2")), 10000)
+            if (cancel == null) {
+                val hierarchy = java.io.ByteArrayOutputStream()
+                device.dumpWindowHierarchy(hierarchy)
+                fail("Preparation must expose cancellation: $hierarchy")
+            }
+            cancel.click()
+            await(scenario, "AndroidAppUI.canReceive() && !document.querySelector('#editor').open")
+            js(scenario, "window.fetch=window.realIncomingFetch")
+            deliver(scenario, shareVideo("Erneut.mp4"))
+            await(scenario, "document.querySelectorAll('#draftVideos .draft-card').length === 1")
+            assertEquals(JSONObject.quote("Erneut"), js(scenario, "document.querySelector('#figureTitle').value"))
+        }
+    }
+
+    @Test
+    fun trustedWarmLinkDispatchesOnceAndForeignLinkDoesNotNavigate() {
+        ActivityScenario.launch(CloudUiActivity::class.java).use { scenario ->
+            await(scenario, "!!window.AndroidAppUI")
+            js(scenario, "window.incomingLibraries=[];AndroidAppUI.openLibrary=async id=>incomingLibraries.push(id)")
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            fun link(url: String) = android.content.Intent(context, CloudUiActivity::class.java)
+                .setAction(android.content.Intent.ACTION_VIEW).setData(android.net.Uri.parse(url))
+            deliver(scenario, link("https://rodriges17.github.io/SalsaAppCloud/?library=Tanz%20%26%20Spa%C3%9F"))
+            await(scenario, "window.incomingLibraries.length === 1 && AndroidAppUI.canReceive()")
+            js(scenario, "AndroidShell.ready(window.androidIncomingDocument);AndroidShell.ready(window.androidIncomingDocument)")
+            deliver(scenario, link("https://example.com/SalsaAppCloud/?library=foreign"))
+            assertEquals("[\"Tanz & Spaß\"]", js(scenario, "JSON.stringify(window.incomingLibraries)").let { org.json.JSONTokener(it).nextValue() })
+            assertEquals("true", js(scenario, "location.origin === 'https://appassets.androidplatform.net'"))
+        }
+    }
+
     @Test
     fun launcherUsesCloudLayoutAndBackProtectsTheEditor() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
