@@ -107,6 +107,8 @@ class NativeIntake(
 
     private fun dispatch(ticket: IncomingSession.Ticket<Action>) {
         val id = ticket.id
+        // Keep user input out of the gap between the JS guard and native dispatch.
+        showProgress(id, "Übergabe wird geprüft …", ticket.action is Action.Files)
         web.evaluateJavascript("window.AndroidAppUI?.beginReceive(${JSONObject.quote(id.toString())}) === true") { allowed ->
             if (!session.active(id)) return@evaluateJavascript
             if (allowed != "true") {
@@ -132,20 +134,22 @@ class NativeIntake(
         }
     }
 
-    private fun showProgress(id: Long, message: String) {
+    private fun showProgress(id: Long, message: String, cancellable: Boolean) {
         progress = ProgressDialog(activity).apply {
             setTitle("Übergabe vorbereiten")
             setMessage(message)
-            setCancelable(true)
+            setCancelable(cancellable)
             setCanceledOnTouchOutside(false)
-            setButton(ProgressDialog.BUTTON_NEGATIVE, "Abbrechen") { _, _ -> cancel(id) }
-            setOnCancelListener { cancel(id) }
+            if (cancellable) {
+                setButton(ProgressDialog.BUTTON_NEGATIVE, "Abbrechen") { _, _ -> cancel(id) }
+                setOnCancelListener { cancel(id) }
+            }
             show()
         }
     }
 
     private fun prepare(id: Long, action: Action.Files) {
-        showProgress(id, "Dateien werden vorbereitet …")
+        progress?.setMessage("Dateien werden vorbereitet …")
         val cancellation = CancellationSignal()
         signal = cancellation
         task = worker.submit {
