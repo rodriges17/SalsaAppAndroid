@@ -374,3 +374,58 @@ test('native cancellation wins atomically even before its queued JavaScript abor
  assert.equal(await page.evaluate(()=>AndroidAppUI.canReceive()),true);
  }finally{await context.close();}
 });
+
+test('Android folder writer queues overlapping writes and duplicate close waits for the same result',async()=>{
+ const{page,context}=await setup();try{
+ const result=await page.evaluate(async()=>{
+  const root=await showDirectoryPicker(),handle=await root.getFileHandle('queued.bin',{create:true});
+  const original=AndroidFiles.call.bind(AndroidFiles);let closes=0,aborts=0;
+  AndroidFiles.call=raw=>{if(JSON.parse(raw).op==='abort')aborts++;return original(raw);};
+  AndroidFiles.closeAsync=(token,id)=>{closes++;setTimeout(()=>AndroidFSWriteResult(id,JSON.parse(original(JSON.stringify({op:'close',token})))),30);};
+  const writer=await handle.createWritable(),first=writer.write(new Blob(['erster-'])),second=writer.write(new Blob(['zweiter']));
+  const close=writer.close(),duplicate=writer.close();let settled=false;duplicate.then(()=>settled=true);
+  await writer.abort();await new Promise(resolve=>setTimeout(resolve,5));const premature=settled;
+  await Promise.all([first,second,close,duplicate]);
+  let afterClose;try{await writer.write('ungültig');}catch(e){afterClose=e.name;}
+  return {same:close===duplicate,premature,closes,aborts,text:await(await handle.getFile()).text(),afterClose};
+ });
+ assert.deepEqual(result,{same:true,premature:false,closes:1,aborts:0,text:'erster-zweiter',afterClose:'InvalidStateError'});
+ }finally{await context.close();}
+});
+
+test('Android folder abort during a pending Blob read sends no late chunk and preserves the target',async()=>{
+ const{page,context}=await setup();try{
+ const result=await page.evaluate(async()=>{
+  const root=await showDirectoryPicker(),handle=await root.getFileHandle('abort.bin',{create:true});
+  const originalWriter=await handle.createWritable();await originalWriter.write('vorher');await originalWriter.close();
+  const original=AndroidFiles.call.bind(AndroidFiles);let writes=0,aborts=0,release;
+  AndroidFiles.call=raw=>{const op=JSON.parse(raw).op;if(op==='write')writes++;if(op==='abort')aborts++;return original(raw);};
+  class SlowBlob extends Blob { slice(){return {arrayBuffer:()=>new Promise(resolve=>release=()=>resolve(new Uint8Array([1,2,3]).buffer))};} }
+  const writer=await handle.createWritable(),reading=writer.write(new SlowBlob(['später'])).then(()=>'',e=>e.name);
+  while(!release)await new Promise(resolve=>setTimeout(resolve,0));
+  await writer.abort();await writer.abort();release();
+  return {error:await reading,writes,aborts,text:await(await handle.getFile()).text()};
+ });
+ assert.deepEqual(result,{error:'AbortError',writes:0,aborts:1,text:'vorher'});
+ }finally{await context.close();}
+});
+
+test('Android folder close errors reach every waiter and release staging for an explicit retry',async()=>{
+ const{page,context}=await setup();try{
+ const result=await page.evaluate(async()=>{
+  const root=await showDirectoryPicker(),handle=await root.getFileHandle('retry.bin',{create:true});
+  const original=AndroidFiles.call.bind(AndroidFiles);let closes=0,aborts=0;
+  AndroidFiles.call=raw=>{if(JSON.parse(raw).op==='abort')aborts++;return original(raw);};
+  AndroidFiles.closeAsync=(token,id)=>{closes++;setTimeout(()=>AndroidFSWriteResult(id,{error:'Ordnerzugriff entzogen',name:'NotAllowedError'}),0);};
+  const writer=await handle.createWritable();await writer.write('nicht gespeichert');
+  const close=writer.close(),duplicate=writer.close();
+  const errors=await Promise.all([close.catch(e=>e.name),duplicate.catch(e=>e.name)]);
+  await writer.abort();
+  const empty=await(await handle.getFile()).text();
+  AndroidFiles.closeAsync=(token,id)=>setTimeout(()=>AndroidFSWriteResult(id,JSON.parse(original(JSON.stringify({op:'close',token})))),0);
+  const retry=await handle.createWritable();await retry.write('erneut');await retry.close();
+  return {errors,closes,aborts,empty,text:await(await handle.getFile()).text()};
+ });
+ assert.deepEqual(result,{errors:['NotAllowedError','NotAllowedError'],closes:1,aborts:1,empty:'',text:'erneut'});
+ }finally{await context.close();}
+});

@@ -1,4 +1,4 @@
-# Step by Step – Android 0.7.21
+# Step by Step – Android 0.7.22
 
 Android-App ab Android 8 (API 26) mit derselben Oberfläche wie SalsaAppCloud: identische Seiten, Navigation, Karten, Dialoge und Hell-/Dunkeldesign. Die Oberfläche ist lokal im APK enthalten; eine Internetverbindung ist nur für Cloud-Inhalte erforderlich.
 
@@ -93,3 +93,7 @@ Verhaltenstests liegen in `web-tests/figure-zip.test.js`; Browserprüfungen sch�
 ## Native Dateiübergabe
 
 Die native Dateiübergabe verwaltet ein vorbereitetes Archiv über Android-Dialog, Speicherortwahl und Zielkopie hinweg. Nach abgebrochener Speicherortwahl oder Schreibfehler bleiben die Daten für einen erneuten Versuch verfügbar. Während der Zielkopie zeigt Android einen Spinner und Prozentstatus; erst nach erfolgreichem Schließen des Zielstreams erscheint „Export gespeichert“. Teilen meldet die Übergabe an Android. Details und Testfälle: [Native Dateiübergabe](docs/NATIVE-DATEIUEBERGABE.md).
+
+## Geräteordner-Schreibvorgänge
+
+Die native Schreibsitzung besitzt temporäre Daten, Zielkopie und Aufräumen gemeinsam. Vor dem Abschluss wird nur die temporäre Datei abgebrochen. Eine begonnene Zielkopie läuft kontrolliert zu Ende; das Schließen der Oberfläche wartet nicht auf den Dokumentanbieter. Weitere Details: [Geräteordner-Schreibvorgang](docs/NATIVE-ORDNERSCHREIBEN.md).
