@@ -99,8 +99,12 @@ class CloudUiTest {
             deliver(scenario, shareVideo("Abbruch.mp4"))
             await(scenario, "window.incomingReadStarted === true")
             val device = androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-            val cancel = device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.text("Abbrechen")), 10000)
-            assertNotNull("Preparation must expose cancellation", cancel)
+            val cancel = device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.res("android:id/button2")), 10000)
+            if (cancel == null) {
+                val hierarchy = java.io.ByteArrayOutputStream()
+                device.dumpWindowHierarchy(hierarchy)
+                fail("Preparation must expose cancellation: $hierarchy")
+            }
             cancel.click()
             await(scenario, "AndroidAppUI.canReceive() && !document.querySelector('#editor').open")
             js(scenario, "window.fetch=window.realIncomingFetch")
