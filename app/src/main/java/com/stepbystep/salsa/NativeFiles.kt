@@ -3,12 +3,13 @@ package com.stepbystep.salsa
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceResponse
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
-import java.io.FileOutputStream
+import java.io.OutputStream
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import org.json.JSONArray
@@ -19,14 +20,8 @@ class NativeFiles(private val activity: Activity, private val script: (String) -
     private val prefs = activity.getSharedPreferences("document-trees", Activity.MODE_PRIVATE)
     private val imports = ConcurrentHashMap<String, Uri>()
 
-    private data class Writer(
-        val file: File,
-        val output: FileOutputStream,
-        val root: String,
-        val path: String,
-    )
-
-    private val writers = ConcurrentHashMap<String, Writer>()
+    private val writes = FolderWriteSessions(File(activity.cacheDir, "saf-writes"))
+    @Volatile private var closed = false
 
     companion object {
         const val PICK_DIRECTORY = 739
@@ -56,13 +51,9 @@ class NativeFiles(private val activity: Activity, private val script: (String) -
     private fun root(id: String): DocumentFile {
         val uri = prefs.getString(id, null) ?: throw SecurityException("Ordner erneut auswählen")
         val parsed = Uri.parse(uri)
-        require(
-            activity.contentResolver.persistedUriPermissions.any {
+        if (!activity.contentResolver.persistedUriPermissions.any {
                 it.uri == parsed && it.isReadPermission && it.isWritePermission
-            }
-        ) {
-            "Ordnerzugriff erneut erlauben"
-        }
+            }) throw SecurityException("Ordnerzugriff erneut erlauben")
         return DocumentFile.fromTreeUri(activity, parsed) ?: error("Ordner nicht verfügbar")
     }
 
@@ -72,6 +63,9 @@ class NativeFiles(private val activity: Activity, private val script: (String) -
             current.findFile(part) ?: throw java.io.FileNotFoundException("Datei nicht gefunden")
         return current
     }
+
+    private fun documentKey(file: DocumentFile): String =
+        "${file.uri.authority}:${DocumentsContract.getDocumentId(file.uri)}"
 
     fun register(uri: Uri): String {
         val id = UUID.randomUUID().toString()
@@ -153,10 +147,10 @@ class NativeFiles(private val activity: Activity, private val script: (String) -
         }
     }
 
-    @Synchronized
     @JavascriptInterface
     fun call(json: String): String {
         return try {
+            check(!closed) { "Dateizugriff bereits geschlossen" }
             val a = JSONObject(json)
             val op = a.getString("op")
             val id = a.optString("root")
@@ -210,81 +204,71 @@ class NativeFiles(private val activity: Activity, private val script: (String) -
                         true
                     }
                     "begin" -> {
-                        document(id, p)
-                        val token = UUID.randomUUID().toString()
-                        val file = File(activity.cacheDir, "saf-$token")
-                        writers[token] = Writer(file, FileOutputStream(file), id, p)
-                        token
+                        val original = document(id, p)
+                        require(!original.isDirectory) { "Keine Datei" }
+                        val key = documentKey(original)
+                        writes.begin(key, object : FolderWriteSessions.Target {
+                            private var opened: DocumentFile? = null
+                            override fun open(): OutputStream {
+                                // Recheck the grant at commit time, not only when staging begins.
+                                val target = document(id, p)
+                                check(documentKey(target) == key) { "Zieldatei wurde inzwischen geändert" }
+                                opened = target
+                                return activity.contentResolver.openOutputStream(target.uri, "wt")
+                                    ?: error("Zieldatei nicht schreibbar")
+                            }
+                            override fun length(): Long = opened!!.length()
+                        })
                     }
                     "write" -> {
-                        val w = writers[a.getString("token")] ?: error("Schreibvorgang fehlt")
-                        val bytes = Base64.decode(a.getString("data"), Base64.DEFAULT)
-                        require(bytes.size <= 262144)
-                        w.output.write(bytes)
+                        writes.append(a.getString("token"), Base64.decode(a.getString("data"), Base64.DEFAULT))
                         true
                     }
                     "close" -> {
-                        val w =
-                            writers.remove(a.getString("token")) ?: error("Schreibvorgang fehlt")
-                        try {
-                            w.output.fd.sync()
-                            w.output.close()
-                            val target = document(w.root, w.path)
-                            activity.contentResolver.openOutputStream(target.uri, "wt")!!.use { out
-                                ->
-                                w.file.inputStream().use { it.copyTo(out, 65536) }
-                            }
-                            require(target.length() == w.file.length()) {
-                                "Schreibprüfung fehlgeschlagen"
-                            }
-                            true
-                        } finally {
-                            w.file.delete()
-                        }
+                        writes.finish(a.getString("token"))
+                        true
                     }
                     "abort" -> {
-                        writers.remove(a.getString("token"))?.let {
-                            it.output.close()
-                            it.file.delete()
-                        }
+                        writes.abort(a.getString("token"))
                         true
                     }
                     else -> error("Unbekannter Dateivorgang")
                 }
             JSONObject().put("value", value).toString()
         } catch (e: Exception) {
-            JSONObject()
-                .put("error", e.message ?: "Dateizugriff fehlgeschlagen")
-                .put(
-                    "name",
-                    when (e) {
-                        is java.io.FileNotFoundException -> "NotFoundError"
-                        is SecurityException -> "NotAllowedError"
-                        else -> "InvalidStateError"
-                    },
-                )
-                .toString()
+            failure(e).toString()
         }
     }
 
-    // A complete SAF copy can take seconds. Return immediately to JavaScript so
-    // WebView can keep rendering the saving indicator while the copy finishes.
+    private fun failure(error: Throwable): JSONObject = JSONObject()
+        .put("error", error.message ?: "Dateizugriff fehlgeschlagen")
+        .put("name", when (error) {
+            is java.io.FileNotFoundException -> "NotFoundError"
+            is SecurityException -> "NotAllowedError"
+            else -> "InvalidStateError"
+        })
+
+    /** Claim the commit before queuing it; provider I/O never owns the bridge monitor. */
     @JavascriptInterface
     fun closeAsync(token: String, request: String) {
-        Thread {
-                val result = call(JSONObject().put("op", "close").put("token", token).toString())
-                script("window.AndroidFSWriteResult?.(${quote(request)}, $result);")
+        try {
+            writes.finishAsync(token) { result ->
+                if (!closed) {
+                    val response = result.fold(
+                        onSuccess = { JSONObject().put("value", true) },
+                        onFailure = ::failure,
+                    )
+                    script("window.AndroidFSWriteResult?.(${quote(request)}, $response);")
+                }
             }
-            .start()
+        } catch (error: Exception) {
+            if (!closed) script("window.AndroidFSWriteResult?.(${quote(request)}, ${failure(error)});")
+        }
     }
 
-    @Synchronized
     fun close() {
-        writers.values.forEach {
-            runCatching { it.output.close() }
-            it.file.delete()
-        }
-        writers.clear()
+        closed = true
+        writes.close()
         imports.clear()
     }
 }

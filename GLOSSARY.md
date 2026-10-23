@@ -17,3 +17,6 @@ Eine über Android geteilte Dateiauswahl oder ein unterstützter Bibliotheks- od
 
 ## Übergabevorbereitung
 Die abbrechbare Prüfung und das Einlesen geteilter Dateien vor dem Öffnen des Import- oder Bearbeitungsdialogs. Ein Abbruch verwirft diese Vorbereitung; verspätete Ergebnisse dürfen keinen Dialog mehr öffnen.
+
+**Geräteordner-Schreibvorgang**:
+Das vorbereitete Schreiben einer Datei in einen verbundenen Geräteordner. Bis zum Abschluss bleiben die Daten vorläufig. Mit dem Abschluss beginnt die Übernahme in die Zieldatei; danach wird sie nicht mehr durch einen Abbruch unterbrochen.

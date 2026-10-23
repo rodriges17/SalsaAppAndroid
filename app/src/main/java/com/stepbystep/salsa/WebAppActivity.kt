@@ -47,7 +47,7 @@ open class WebAppActivity : Activity() {
             else insets.consumeSystemWindowInsets()
         }
         nativeFiles =
-            NativeFiles(this) { source -> runOnUiThread { web.evaluateJavascript(source, null) } }
+            NativeFiles(this) { source -> runOnUiThread { if (!isDestroyed && !isFinishing) web.evaluateJavascript(source, null) } }
         nativeMedia = NativeMedia(this)
         downloads = NativeFileDelivery(this)
         nativeNetwork =

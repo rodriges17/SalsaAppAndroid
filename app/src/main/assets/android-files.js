@@ -27,20 +27,43 @@
     async getMetadata() { return call({...this,op:'stat'}); }
     async getFile() { const info=call({...this,op:'stat'}),r=await fetch(info.url); if(!r.ok)throw new DOMException('Datei nicht gefunden','NotFoundError'); const blob=await r.blob(); return new File([blob],info.name,{type:blob.type,lastModified:info.lastModified}); }
     async createWritable() {
-      const token=call({...this,op:'begin'}); let ended=false;
+      const token=call({...this,op:'begin'});
+      let state='open', pending=Promise.resolve(), closing;
+      const cancelled=()=>{if(state==='aborted')throw new DOMException('Schreibvorgang abgebrochen','AbortError');};
       return {
-        async write(value) {
-          if(ended)throw new Error('Schreibvorgang bereits geschlossen');
+        write(value) {
+          if(state!=='open')return Promise.reject(new DOMException('Schreibvorgang bereits geschlossen','InvalidStateError'));
           const blob=value instanceof Blob?value:new Blob([value]);
-          let yielded=performance.now();
-          // Bounded 192 KiB blocks cut bridge calls by 4 while keeping the UI responsive.
-          for(let p=0;p<blob.size;p+=196608){
-            call({op:'write',token,data:encode(new Uint8Array(await blob.slice(p,p+196608).arrayBuffer()))});
-            if(performance.now()-yielded>=16){await new Promise(resolve=>setTimeout(resolve,0));yielded=performance.now();}
-          }
+          const operation=pending.then(async()=>{
+            cancelled();
+            let yielded=performance.now();
+            // Queue writes and bound each bridge call to 192 KiB.
+            for(let p=0;p<blob.size;p+=196608){
+              const bytes=new Uint8Array(await blob.slice(p,p+196608).arrayBuffer());
+              cancelled();
+              call({op:'write',token,data:encode(bytes)});
+              if(performance.now()-yielded>=16){await new Promise(resolve=>setTimeout(resolve,0));yielded=performance.now();}
+            }
+            cancelled();
+          });
+          pending=operation;
+          return operation;
         },
-        async close() { if(ended)return; ended=true;await finishWrite(token); },
-        async abort() { if(ended)return;ended=true;call({op:'abort',token}); }
+        close() {
+          if(closing)return closing;
+          if(state!=='open')return Promise.reject(new DOMException('Schreibvorgang bereits geschlossen','InvalidStateError'));
+          // close wins over abort, including while earlier queued writes finish.
+          state='closing';
+          closing=(async()=>{
+            try { await pending;await finishWrite(token);state='closed'; }
+            catch(error){state='failed';try{call({op:'abort',token});}catch{}throw error;}
+          })();
+          return closing;
+        },
+        async abort() {
+          if(state!=='open')return;
+          state='aborted';call({op:'abort',token});
+        }
       };
     }
   }
