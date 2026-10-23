@@ -280,3 +280,12 @@ test('ZIP save adapter streams original bytes in bounded chunks and reports nati
  assert.equal(result.result,'native');assert.equal(result.same,true);assert.equal(result.bounded,true);assert.match(result.progress,/100 %/);assert.equal(result.aborted,true);assert.equal(result.finished,false);assert.match(result.error,/Speicher/);
  }finally{await context.close();}
 });
+
+
+test('native Android storage uses an information status without a browser permission button',async()=>{
+ const {page,context}=await setup();try{
+ await page.evaluate(()=>{window.persistCalls=0;Object.defineProperty(navigator.storage,'persist',{value:async()=>{window.persistCalls++;return false;},configurable:true});});
+ await page.locator('#infoButton').click();await page.waitForFunction(()=>document.querySelector('#persistenceResult').textContent.includes('Keine zusätzliche Speicherfreigabe erforderlich'));
+ assert.equal(await page.locator('#persistStorage').isVisible(),false);assert.match(await page.locator('#storageDetails').textContent(),/privaten Android-App-Speicher/);assert.equal(await page.evaluate(()=>persistCalls),0);
+ }finally{await context.close();}
+});
