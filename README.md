@@ -1,4 +1,4 @@
-# Step by Step – Android 0.7.11
+# Step by Step – Android 0.7.20
 
 Android-App ab Android 8 (API 26) mit derselben Oberfläche wie SalsaAppCloud: identische Seiten, Navigation, Karten, Dialoge und Hell-/Dunkeldesign. Die Oberfläche ist lokal im APK enthalten; eine Internetverbindung ist nur für Cloud-Inhalte erforderlich.
 
@@ -89,3 +89,7 @@ Der geprüfte gemeinsame Funktionsumfang und die Plattformadapter sind in [docs/
 Das vollständige Backup behält `backup-workflow.js` und sein eigenes Archivformat einschließlich Lernständen. Nur die Übergabe fertiger Sicherungsteile verwendet dasselbe Datei-Modul. Android verwendet einen gemeinsamen Adapter mit kleinen Blöcken und Abbruchsignal, auch für die älteren nativen Ansichten.
 
 Verhaltenstests liegen in `web-tests/figure-zip.test.js`; Browserprüfungen schützen zusätzlich echte Downloads, Picker-Aktivierung und Wiederholungen. Archivtests prüfen unveränderte Videodaten sowie die getrennte Behandlung persönlicher Lernstände.
+
+## Native Dateiübergabe
+
+Die native Dateiübergabe verwaltet ein vorbereitetes Archiv über Android-Dialog, Speicherortwahl und Zielkopie hinweg. Nach abgebrochener Speicherortwahl oder Schreibfehler bleiben die Daten für einen erneuten Versuch verfügbar. Während der Zielkopie zeigt Android einen Spinner und Prozentstatus; erst nach erfolgreichem Schließen des Zielstreams erscheint „Export gespeichert“. Teilen meldet die Übergabe an Android. Details und Testfälle: [Native Dateiübergabe](docs/NATIVE-DATEIUEBERGABE.md).

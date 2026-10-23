@@ -10,7 +10,8 @@
     }
     document.documentElement.dataset.offlineStatus='ready';
     document.getElementById('offlineDetails').textContent='Die Oberfläche ist im APK enthalten und startet ohne Internet. Cloud-Funktionen benötigen Internet.';
-    document.getElementById('appVersion').textContent='Step by Step · Android 0.7.16';
+    const version=typeof AndroidPlatform.versionName==='function'?AndroidPlatform.versionName():'';
+    document.getElementById('appVersion').textContent=`Step by Step · Android${version?' '+version:''}`;
     document.querySelector('#persistStorage').hidden=true;
     document.addEventListener('click',event=>{
       if(event.target.closest('#rotatePlayer')){const b=document.getElementById('rotatePlayer');AndroidPlatform.rotate(b.getAttribute('aria-pressed')!=='true');}
