@@ -224,7 +224,7 @@ open class WebAppActivity : Activity() {
         )
         configureNativeBridge()
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
-        handleSharedLogin(intent)
+        receiveInitialIntent(intent)
         if (web.url.isNullOrEmpty()) web.loadUrl(appUrl)
     }
 
@@ -234,28 +234,21 @@ open class WebAppActivity : Activity() {
 
     protected open fun configureNativeBridge() {}
 
+    protected open fun receiveInitialIntent(incoming: Intent?) { handleSharedLogin(incoming) }
+
+    protected open fun receiveNewIntent(incoming: Intent) { handleSharedLogin(incoming) }
+
     protected fun handleSharedLogin(incoming: Intent?) {
-        val candidate =
-            when (incoming?.action) {
-                Intent.ACTION_VIEW -> incoming.dataString
-                Intent.ACTION_SEND ->
-                    if (incoming.type == "text/plain") {
-                        Regex("""https://[^\s<>"\']+""")
-                            .find(incoming.getStringExtra(Intent.EXTRA_TEXT).orEmpty())
-                            ?.value
-                    } else null
-                else -> null
-            } ?: return
-        val link = runCatching { Uri.parse(candidate.trimEnd('.', ',', ')')) }.getOrNull() ?: return
-        if (link.scheme != "https") return
-        val validSource =
-            (link.host == "rodriges17.github.io" &&
-                link.path.orEmpty().startsWith("/SalsaAppCloud/")) ||
-                (link.host == "tzaprobvauikssnpiucl.supabase.co" &&
-                    link.path.orEmpty().startsWith("/auth/v1/verify"))
-        if (!validSource || link.getQueryParameter("type") != "magiclink") return
-        val token = link.getQueryParameter("token_hash") ?: return
-        if (!token.matches(Regex("[A-Za-z0-9_-]{16,512}"))) return
+        val raw = when (incoming?.action) {
+            Intent.ACTION_VIEW -> incoming.dataString
+            Intent.ACTION_SEND -> if (incoming.type == "text/plain") incoming.getStringExtra(Intent.EXTRA_TEXT) else null
+            else -> null
+        } ?: return
+        val target = IncomingLink.classify(raw) as? IncomingLink.Login ?: return
+        openSharedLogin(target.token)
+    }
+
+    protected fun openSharedLogin(token: String) {
         // Never open an external origin with the privileged JavaScript bridge.
         web.loadUrl(appUrl + "?token_hash=" + Uri.encode(token) + "&type=magiclink&cloud=1")
     }
@@ -263,7 +256,7 @@ open class WebAppActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleSharedLogin(intent)
+        receiveNewIntent(intent)
     }
 
     @Deprecated("Android system file selection")

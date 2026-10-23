@@ -326,3 +326,42 @@ test('bundled media descriptors share the PWA lazy-loading and retry contract',a
  const{mediaContract,expectedMediaContract}=await import('./media-contract.js');
  assert.deepEqual(await mediaContract(page,'/assets/'),expectedMediaContract);
  }finally{await context.close();}});
+
+test('incoming preparation reserves the UI and cancellation suppresses a late read before retry', async()=>{
+ const {page,context}=await setup();let release;const held=new Promise(resolve=>release=resolve);try{
+ let started=false;
+ await page.route(origin+'/held-video.mp4',async route=>{started=true;await held;try{await route.fulfill({status:200,contentType:'video/mp4',body:await readFile(new URL('./fixtures/video.mp4',import.meta.url))});}catch{/* aborted */}});
+ await page.evaluate(url=>{
+   window.firstIncoming=AndroidAppUI.receive([{url,name:'Verworfen.mp4',type:'video/mp4'}],'first').then(()=> 'completed',e=>e.name);
+ },origin+'/held-video.mp4');
+ while(!started)await new Promise(resolve=>setTimeout(resolve,5));
+ assert.equal(await page.evaluate(()=>AndroidAppUI.canReceive()),false);
+ assert.equal(await page.evaluate(()=>AndroidAppUI.beginReceive('second')),false);
+ await assert.rejects(()=>page.evaluate(()=>AndroidAppUI.receive([{url:'/fixture.mp4',name:'Unerwartet.mp4',type:'video/mp4'}],'second')),/aktuellen Vorgang/);
+ await page.evaluate(()=>AndroidAppUI.cancelReceive('first'));
+ assert.equal(await page.evaluate(()=>window.firstIncoming),'AbortError');
+ assert.equal(await page.locator('#editor').evaluate(e=>e.open),false);
+ assert.equal(await page.evaluate(()=>AndroidAppUI.beginReceive('retry')),true);
+ await page.evaluate(()=>AndroidAppUI.cancelReceive('first'));
+ assert.equal(await page.evaluate(()=>AndroidAppUI.canReceive()),false,'old cancellation cannot clear a newer intake');
+ release();
+ await page.evaluate(url=>AndroidAppUI.receive([{url,name:'Erneut.mp4',type:'video/mp4'}],'retry'),origin+'/fixture.mp4');
+ assert.equal(await page.locator('#figureTitle').inputValue(),'Erneut');
+ assert.equal(await page.locator('#draftVideos .draft-card').count(),1);
+ }finally{release?.();await context.close();}
+});
+
+test('incoming read cannot replace an editor opened while the provider was pending',async()=>{
+ const{page,context}=await setup();let release;const held=new Promise(resolve=>release=resolve);try{
+ let started=false;
+ await page.route(origin+'/pending-video.mp4',async route=>{started=true;await held;await route.fulfill({status:200,contentType:'video/mp4',body:await readFile(new URL('./fixtures/video.mp4',import.meta.url))});});
+ await page.evaluate(url=>{window.pendingIncoming=AndroidAppUI.receive([{url,name:'Spät.mp4',type:'video/mp4'}]).then(()=>'',e=>e.message);},origin+'/pending-video.mp4');
+ while(!started)await new Promise(resolve=>setTimeout(resolve,5));
+ await page.locator('#addFigure').evaluate(e=>e.click());
+ await page.locator('#figureTitle').fill('Mein Entwurf');
+ release();
+ assert.match(await page.evaluate(()=>window.pendingIncoming),/aktuellen Vorgang/);
+ assert.equal(await page.locator('#figureTitle').inputValue(),'Mein Entwurf');
+ assert.equal(await page.locator('#draftVideos .draft-card').count(),0);
+ }finally{release?.();await context.close();}
+});

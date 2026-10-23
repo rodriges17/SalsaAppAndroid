@@ -11,3 +11,9 @@ Die Übergabe eines vorbereiteten Archivs an Android, um es an einem gewählten 
 
 **Vorbereitetes Archiv**:
 Eine vollständig erstellte Datei für eine Figur-ZIP oder einen Teil eines vollständigen Backups, die ohne erneute Erstellung gespeichert oder geteilt werden kann.
+
+## Eingehende Übergabe
+Eine über Android geteilte Dateiauswahl oder ein unterstützter Bibliotheks- oder Anmeldelink. Sie wartet bei einem Kaltstart auf die bereite Oberfläche und wird genau einmal übernommen. Eine laufende Übergabe oder ein offener Bearbeitungsvorgang wird durch eine weitere Übergabe nicht ersetzt.
+
+## Übergabevorbereitung
+Die abbrechbare Prüfung und das Einlesen geteilter Dateien vor dem Öffnen des Import- oder Bearbeitungsdialogs. Ein Abbruch verwirft diese Vorbereitung; verspätete Ergebnisse dürfen keinen Dialog mehr öffnen.
