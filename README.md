@@ -97,3 +97,7 @@ Die native Dateiübergabe verwaltet ein vorbereitetes Archiv über Android-Dialo
 ## Geräteordner-Schreibvorgänge
 
 Die native Schreibsitzung besitzt temporäre Daten, Zielkopie und Aufräumen gemeinsam. Vor dem Abschluss wird nur die temporäre Datei abgebrochen. Eine begonnene Zielkopie läuft kontrolliert zu Ende; das Schließen der Oberfläche wartet nicht auf den Dokumentanbieter. Weitere Details: [Geräteordner-Schreibvorgang](docs/NATIVE-ORDNERSCHREIBEN.md).
+
+### Lokale Originale nach neuen Cloud-Uploads
+
+Neue erfolgreiche Uploads speichern auf diesem Gerät eine Zuordnung aus Konto, Cloud-Version, lokalem Speicherort und den ausgewählten Video-IDs (`app/src/main/assets/cloud-local.js`). Umbenennen und Lernstand ändern diese Zuordnung nicht. Entfernte oder ersetzte Videos zählen nicht mehr als verfügbar; fehlt der Ordnerzugriff, zeigt die Oberfläche die bekannte Zuordnung ohne Verfügbarkeit zu bestätigen. Andere Cloud-Versionen und Konten bleiben getrennt. Frühere Uploads werden nicht nachträglich zugeordnet. Die Prüfung lädt keine Videos zum Vergleich herunter und schreibt keine lokalen Figuren oder Lernstände um.

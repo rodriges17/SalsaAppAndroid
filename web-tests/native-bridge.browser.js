@@ -85,6 +85,7 @@ test('native cloud upload preserves the server reservation/finalize/commit contr
   if(url.pathname==='/auth/v1/verify')result={access_token:'test-token',refresh_token:'test-refresh',expires_in:3600};
   else if(url.pathname==='/functions/v1/cloud'){
    const {action,payload}=request.postDataJSON();actions.push({action,payload});
+   if(action==='state')result={me:{id:'native-owner',is_admin:false},libraries:[],own_figures:[]};
    if(action==='reserve')result={job:'job-1',media:payload.videos.map((_,i)=>({id:`media-${i}`,path:`user/video-${i}`}))};
    if(action==='commit')result={revision:'revision-1'};
   }else if(url.pathname.startsWith('/storage/v1/object/salsa-cloud/')){
@@ -93,8 +94,12 @@ test('native cloud upload preserves the server reservation/finalize/commit contr
   try{await route.fulfill({status:200,headers,contentType:'application/json',body:JSON.stringify(result)});}catch{/* canceled request */}
  });
  await rpc(page,'login',{link:'https://rodriges17.github.io/SalsaAppCloud/?token_hash=unit-test-token-hash-1234567890123456&type=magiclink'});
+ await rpc(page,'cloudState');actions.length=0;
  const f=await create(page);await rpc(page,'cloudUpload',{id:f.id,videos:f.videoIds,library:'library-1',allowed:true});
  assert.deepEqual(actions.map(a=>a.action),['reserve','finalize','commit','attach']);assert.equal(actions[2].payload.public_allowed,true);assert.deepEqual(uploaded[0],await readFile(new URL('./fixtures/video.mp4',import.meta.url)));
+ const linked=await page.evaluate(async f=>{
+  const {createCloudLocalIndex}=await import('./cloud-local.js');return [...createCloudLocalIndex(localStorage,`salsa-cloud-local:${new URL('./',location.href).pathname}:v1`).selections('native-owner','revision-1',[f])[0]];
+ },f);assert.deepEqual(linked,['media-0']);
  actions.length=0;stall=true;started=false;const pending=rpc(page,'cloudUpload',{id:f.id,videos:f.videoIds,allowed:false});pending.catch(()=>{});
  while(!started)await new Promise(resolve=>setTimeout(resolve,5));await rpc(page,'cancel');await assert.rejects(()=>pending);assert.ok(actions.some(a=>a.action==='abort'&&a.payload.job==='job-1'));
  }finally{await context.close();}});
