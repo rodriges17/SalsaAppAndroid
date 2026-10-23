@@ -264,3 +264,19 @@ for(const scenario of PARITY_CASES)test('shared feature contract: '+scenario,asy
   await runParityCase(page,{root:'/',fixture:'/fixture.mp4',native:true,scenario,consoleErrors:errors});
  }finally{await context.close();}
 });
+
+
+test('ZIP save adapter streams original bytes in bounded chunks and reports native errors',async()=>{
+ const {page,context}=await setup();try{
+ const result=await page.evaluate(async()=>{
+  const bytes=Uint8Array.from({length:900017},(_,i)=>i%251),progress=[];
+  const result=await stepFileDelivery.save(new File([bytes],'Native-Test.zip',{type:'application/zip'}),text=>progress.push(text));
+  const decoded=AndroidDownloads.parts.flatMap(part=>Array.from(atob(part),c=>c.charCodeAt(0)));
+  const same=decoded.length===bytes.length&&decoded.every((b,i)=>b===bytes[i]),bounded=AndroidDownloads.parts.every(part=>atob(part).length<=49152);
+  let aborted=false,finished=false;AndroidDownloads.chunk=()=>false;AndroidDownloads.abort=()=>aborted=true;AndroidDownloads.finish=()=>{finished=true;return true;};
+  let error;try{await stepFileDelivery.save(new File([bytes],'Retry.zip'));}catch(e){error=e.message;}
+  return{result,same,bounded,progress:progress.at(-1),aborted,finished,error};
+ });
+ assert.equal(result.result,'native');assert.equal(result.same,true);assert.equal(result.bounded,true);assert.match(result.progress,/100 %/);assert.equal(result.aborted,true);assert.equal(result.finished,false);assert.match(result.error,/Speicher/);
+ }finally{await context.close();}
+});

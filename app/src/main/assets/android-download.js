@@ -26,20 +26,25 @@ if (window.AndroidDownloads) {
     }
   }, true);
 }
-// Native file sharing makes the PWA's ZIP and multi-part backup share actions available in WebView.
+// The ZIP button calls this directly so errors and progress reach its dialog.
 if (window.AndroidDownloads) {
   navigator.canShare = data => Array.isArray(data?.files) && data.files.length === 1;
-  navigator.share = async data => {
-    if (!navigator.canShare(data)) throw new Error('Bitte eine Datei zum Teilen wählen.');
-    const file = data.files[0];
+  window.stepFileDelivery = { async save(file, progress = () => {}) {
     if (!AndroidDownloads.start(file.name || 'export.zip')) throw new Error('Ein Export läuft bereits.');
     try {
-      for (let p=0;p<file.size;p+=49152) {
-        const bytes = new Uint8Array(await file.slice(p,p+49152).arrayBuffer()); let binary='';
-        for(const b of bytes)binary+=String.fromCharCode(b);
-        if(!AndroidDownloads.chunk(btoa(binary)))throw new Error('Export fehlgeschlagen.');
+      await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+      for (let offset = 0; offset < file.size; offset += 49152) {
+        const bytes = new Uint8Array(await file.slice(offset, offset + 49152).arrayBuffer());
+        let binary = ''; for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        if (!AndroidDownloads.chunk(btoa(binary))) throw new Error('Nicht genügend Speicher für den Export.');
+        progress(`ZIP wird übergeben: ${Math.min(100, Math.round((offset + bytes.length) / file.size * 100))} % …`);
       }
-      if(!AndroidDownloads.finish(file.type||'application/octet-stream'))throw new Error('Teilen fehlgeschlagen.');
-    } catch(e) {AndroidDownloads.abort();throw e;}
+      if (!AndroidDownloads.finish(file.type || 'application/octet-stream')) throw new Error('Export konnte nicht abgeschlossen werden.');
+      return 'native';
+    } catch (error) { AndroidDownloads.abort(); throw error; }
+  }};
+  navigator.share = data => {
+    if (!navigator.canShare(data)) return Promise.reject(new Error('Bitte eine Datei zum Teilen wählen.'));
+    return window.stepFileDelivery.save(data.files[0]);
   };
 }
