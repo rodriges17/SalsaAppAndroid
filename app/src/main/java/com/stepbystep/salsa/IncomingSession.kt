@@ -4,7 +4,7 @@ package com.stepbystep.salsa
 internal class IncomingSession<T> : AutoCloseable {
     data class Ticket<T>(val id: Long, val action: T, val dispatchNow: Boolean)
 
-    private data class Entry<T>(val id: Long, val action: T, var dispatched: Boolean)
+    private data class Entry<T>(val id: Long, val action: T, var dispatched: Boolean, var committed: Boolean = false)
     private var current: Entry<T>? = null
     private var shellReady = false
     private var closed = false
@@ -38,6 +38,14 @@ internal class IncomingSession<T> : AutoCloseable {
     @Synchronized
     fun active(id: Long): Boolean = !closed && current?.id == id
 
+    /** Linearizes applying the prepared action against cancellation from the native UI. */
+    @Synchronized
+    fun claim(id: Long): Boolean {
+        val entry = current?.takeIf { !closed && it.id == id && !it.committed } ?: return false
+        entry.committed = true
+        return true
+    }
+
     @Synchronized
     fun finish(id: Long): Boolean {
         if (closed || current?.id != id) return false
@@ -46,7 +54,11 @@ internal class IncomingSession<T> : AutoCloseable {
     }
 
     @Synchronized
-    fun cancel(id: Long): Boolean = finish(id)
+    fun cancel(id: Long): Boolean {
+        if (closed || current?.id != id || current?.committed == true) return false
+        current = null
+        return true
+    }
 
     @Synchronized
     override fun close() {

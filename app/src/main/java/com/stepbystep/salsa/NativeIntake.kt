@@ -55,6 +55,20 @@ class NativeIntake(
         }
     }
 
+    /** Synchronous bridge seam: cancellation and UI hand-off have one atomic winner. */
+    @JavascriptInterface
+    fun claim(id: String): Boolean {
+        val ticket = id.toLongOrNull() ?: return false
+        if (!session.claim(ticket)) return false
+        activity.runOnUiThread {
+            if (session.active(ticket)) {
+                progress?.setCancelable(false)
+                progress?.getButton(ProgressDialog.BUTTON_NEGATIVE)?.isEnabled = false
+            }
+        }
+        return true
+    }
+
     @JavascriptInterface
     fun completed(id: String, error: String) = activity.runOnUiThread {
         val ticket = id.toLongOrNull() ?: return@runOnUiThread
@@ -65,8 +79,6 @@ class NativeIntake(
 
     fun offer(intent: Intent?) {
         if (closed || intent == null) return
-        // Do not retain either accepted or rejected delivery intents for activity recreation.
-        activity.intent = Intent(activity, activity.javaClass)
         val action = try { classify(intent) } catch (error: Exception) {
             notice(error.message ?: "Übergabe nicht lesbar")
             return
@@ -174,15 +186,19 @@ class NativeIntake(
     }
 
     private fun cancel(id: Long) {
-        if (!session.active(id)) return
+        if (!session.cancel(id)) return
         signal?.cancel()
         task?.cancel(true)
         web.evaluateJavascript("window.AndroidAppUI?.cancelReceive('$id')", null)
-        release(id)
+        cleanup()
     }
 
     private fun release(id: Long) {
         if (!session.finish(id)) return
+        cleanup()
+    }
+
+    private fun cleanup() {
         registered.forEach(files::unregister)
         registered = emptyList()
         progress?.dismiss()
@@ -196,9 +212,11 @@ class NativeIntake(
 
     override fun close() {
         if (closed) return
-        currentId?.let(::cancel)
         closed = true
         session.close()
+        signal?.cancel()
+        task?.cancel(true)
+        cleanup()
         worker.shutdownNow()
     }
 }

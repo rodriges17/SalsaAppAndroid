@@ -2,11 +2,18 @@ package com.stepbystep.salsa
 
 import android.app.AlertDialog
 import android.content.Intent
+import android.os.Bundle
 import android.webkit.JavascriptInterface
 
 /** The bundled SalsaAppCloud UI, with Android storage, sharing and playback integrations. */
 class CloudUiActivity : WebAppActivity() {
     private lateinit var intake: NativeIntake
+    private var restored = false
+
+    override fun onCreate(state: Bundle?) {
+        restored = state != null
+        super.onCreate(state)
+    }
 
     override fun configureNativeBridge() {
         intake = NativeIntake(this, web, nativeFiles) { token -> openSharedLogin(token) }
@@ -29,7 +36,10 @@ class CloudUiActivity : WebAppActivity() {
         )
     }
 
-    override fun receiveInitialIntent(incoming: Intent?) = intake.offer(incoming)
+    override fun receiveInitialIntent(incoming: Intent?) {
+        // A restored Activity must not replay an already delivered or rejected action.
+        if (!restored) intake.offer(incoming)
+    }
     override fun receiveNewIntent(incoming: Intent) = intake.offer(incoming)
 
     override fun onDestroy() {

@@ -236,7 +236,10 @@ open class WebAppActivity : Activity() {
 
     protected open fun receiveInitialIntent(incoming: Intent?) { handleSharedLogin(incoming) }
 
-    protected open fun receiveNewIntent(incoming: Intent) { handleSharedLogin(incoming) }
+    protected open fun receiveNewIntent(incoming: Intent) {
+        setIntent(incoming)
+        handleSharedLogin(incoming)
+    }
 
     protected fun handleSharedLogin(incoming: Intent?) {
         val raw = when (incoming?.action) {
@@ -255,7 +258,6 @@ open class WebAppActivity : Activity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent)
         receiveNewIntent(intent)
     }
 

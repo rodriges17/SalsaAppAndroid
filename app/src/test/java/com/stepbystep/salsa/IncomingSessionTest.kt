@@ -2,8 +2,67 @@ package com.stepbystep.salsa
 
 import org.junit.Assert.*
 import org.junit.Test
+import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class IncomingSessionTest {
+    @Test fun claimMakesTheCurrentCommitNonCancellableUntilCompletion() {
+        IncomingSession<String>().use { session ->
+            session.ready()
+            val ticket = session.offer("apply prepared input")!!
+            assertTrue(session.claim(ticket.id))
+            assertFalse(session.claim(ticket.id))
+            assertFalse(session.cancel(ticket.id))
+            assertTrue(session.active(ticket.id))
+            assertNull(session.offer("cannot replace committed input"))
+            assertTrue(session.finish(ticket.id))
+            assertFalse(session.active(ticket.id))
+            assertFalse(session.claim(ticket.id))
+        }
+    }
+
+    @Test fun cancellationAndStaleIdsCannotClaimOrCancelTheNextInput() {
+        IncomingSession<String>().use { session ->
+            session.ready()
+            val cancelled = session.offer("cancel before commit")!!
+            assertTrue(session.cancel(cancelled.id))
+            assertFalse(session.claim(cancelled.id))
+            val next = session.offer("new input")!!
+            assertFalse(session.claim(cancelled.id))
+            assertFalse(session.cancel(cancelled.id))
+            assertTrue(session.active(next.id))
+            assertTrue(session.claim(next.id))
+            session.close()
+            assertFalse(session.active(next.id))
+            assertFalse(session.claim(next.id))
+            assertFalse(session.finish(next.id))
+        }
+    }
+
+    @Test fun concurrentClaimAndCancellationHaveExactlyOneWinner() {
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            repeat(40) {
+                IncomingSession<String>().use { session ->
+                    session.ready()
+                    val ticket = session.offer("racing input")!!
+                    val start = CountDownLatch(1)
+                    val claim = executor.submit(Callable { start.await(); session.claim(ticket.id) })
+                    val cancel = executor.submit(Callable { start.await(); session.cancel(ticket.id) })
+                    start.countDown()
+                    val claimed = claim.get(5, TimeUnit.SECONDS)
+                    val cancelled = cancel.get(5, TimeUnit.SECONDS)
+                    assertNotEquals(claimed, cancelled)
+                    assertEquals(claimed, session.active(ticket.id))
+                    if (claimed) assertTrue(session.finish(ticket.id))
+                    else assertFalse(session.claim(ticket.id))
+                }
+            }
+        } finally { executor.shutdownNow() }
+    }
+
     @Test fun coldStartKeepsTheFirstActionAndDispatchesExactlyOnce() {
         IncomingSession<String>().use { session ->
             val first = session.offer("first")!!

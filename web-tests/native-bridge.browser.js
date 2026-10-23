@@ -365,3 +365,12 @@ test('incoming read cannot replace an editor opened while the provider was pendi
  assert.equal(await page.locator('#draftVideos .draft-card').count(),0);
  }finally{release?.();await context.close();}
 });
+
+test('native cancellation wins atomically even before its queued JavaScript abort arrives',async()=>{
+ const{page,context}=await setup();try{
+ await page.evaluate(()=>{window.AndroidIntake={claim(){return false;}};});
+ await assert.rejects(()=>page.evaluate(url=>AndroidAppUI.receive([{url,name:'Zu spät.mp4',type:'video/mp4'}],'cancelled-native'),origin+'/fixture.mp4'),/Abgebrochen/);
+ assert.equal(await page.locator('#editor').evaluate(e=>e.open),false);
+ assert.equal(await page.evaluate(()=>AndroidAppUI.canReceive()),true);
+ }finally{await context.close();}
+});

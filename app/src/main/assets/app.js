@@ -659,6 +659,8 @@ window.AndroidAppUI = {
       }
       check();
       if (!incomingUIAvailable()) throw new Error('Bitte zuerst den aktuellen Vorgang abschließen und erneut teilen.');
+      // A queued JS abort alone cannot arbitrate against Android's UI thread.
+      if (window.AndroidIntake && !AndroidIntake.claim(String(id))) throw new DOMException('Abgebrochen', 'AbortError');
       let input;
       if (videos) { await openEditor(); input = $('videoFiles'); }
       else if (backup) { $('restoreBackup').click(); input = document.querySelector('#backupBody input[type="file"]'); }
