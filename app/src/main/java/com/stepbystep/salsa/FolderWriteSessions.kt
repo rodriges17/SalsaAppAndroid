@@ -32,12 +32,11 @@ internal class FolderWriteSessions(private val directory: File) : AutoCloseable 
     private val worker = Executors.newSingleThreadExecutor()
     @Volatile private var closed = false
 
-    init {
-        check(directory.isDirectory || directory.mkdirs()) { "Temporärer Schreibspeicher nicht verfügbar." }
-    }
-
     fun begin(key: String, target: Target): String = synchronized(lock) {
         check(!closed) { "Ordnerspeicher wurde geschlossen." }
+        // Creating a write cache must not prevent the activity from starting when storage is full.
+        directory.mkdirs()
+        check(directory.isDirectory) { "Temporärer Schreibspeicher nicht verfügbar." }
         check(!targets.containsKey(key)) { "Für diese Datei läuft bereits ein Schreibvorgang." }
         val token = UUID.randomUUID().toString()
         val leaseKey = "$directoryKey\u0000$key"

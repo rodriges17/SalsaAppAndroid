@@ -34,6 +34,23 @@ class FolderWriteSessionsTest {
         assertTrue(directory.listFiles()!!.none { it.name.startsWith("saf-") })
     }
 
+    @Test fun unavailableStagingFailsTheWriteWithoutPreventingManagerStartupOrRetry() {
+        val root = directory()
+        val staging = File(root, "writes").apply { writeText("not a directory") }
+        val target = LocalTarget(File(root, "target").apply { writeText("old bytes") })
+        try {
+            FolderWriteSessions(staging).use { manager ->
+                assertThrows(IllegalStateException::class.java) { manager.begin("target", target) }
+                assertEquals("old bytes", target.file.readText())
+                assertTrue(staging.delete())
+                val token = staged(manager, "target", target, "new bytes".toByteArray())
+                manager.finish(token)
+                assertEquals("new bytes", target.file.readText())
+                assertNoStaging(staging)
+            }
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun writesRealBytesOnlyOnCloseAndHoldsTheTargetLeaseUntilCompletion() {
         val dir = directory()
         val target = LocalTarget(File(dir, "video.mp4").apply { writeText("old bytes") })
