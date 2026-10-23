@@ -2,22 +2,17 @@ package com.stepbystep.salsa
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.content.ClipData
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
-import android.util.Base64
 import android.view.View
 import android.webkit.*
 import android.webkit.JavascriptInterface
 import android.widget.*
-import androidx.core.content.FileProvider
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
-import java.io.File
-import java.io.FileOutputStream
 
 open class WebAppActivity : Activity() {
     protected lateinit var web: WebView
@@ -29,148 +24,7 @@ open class WebAppActivity : Activity() {
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private val fileRequest = 734
-    private val saveRequest = 735
-    private var pendingSave: File? = null
-    private var exportFile: File? = null
-    private var exportStream: FileOutputStream? = null
-    private val exportLock = Any()
-
-    private inner class AndroidDownloads {
-        @JavascriptInterface
-        fun start(name: String): Boolean {
-            synchronized(exportLock) {
-                if (exportStream != null) return false
-                // The privileged WebView only loads bundled app assets; main-frame navigation is
-                // blocked.
-                val safe =
-                    name
-                        .substringAfterLast('/')
-                        .replace(Regex("[^A-Za-z0-9._-]"), "_")
-                        .take(100)
-                        .ifBlank { "export.zip" }
-                val dir = File(cacheDir, "exports").apply { mkdirs() }
-                val target = File(dir, "${System.currentTimeMillis()}-$safe")
-                return try {
-                    exportFile = target
-                    exportStream = FileOutputStream(target)
-                    true
-                } catch (_: Exception) {
-                    false
-                }
-            }
-        }
-
-        @JavascriptInterface
-        fun chunk(data: String): Boolean {
-            synchronized(exportLock) {
-                val out = exportStream ?: return false
-                return try {
-                    val bytes = Base64.decode(data, Base64.DEFAULT)
-                    if (
-                        bytes.size > 262144 ||
-                            (exportFile?.length() ?: 0) + bytes.size > 300L * 1024 * 1024
-                    ) {
-                        abort()
-                        false
-                    } else {
-                        out.write(bytes)
-                        true
-                    }
-                } catch (_: Exception) {
-                    abort()
-                    false
-                }
-            }
-        }
-
-        @JavascriptInterface
-        fun finish(mime: String): Boolean {
-            val file =
-                synchronized(exportLock) {
-                    val f = exportFile ?: return false
-                    try {
-                        exportStream?.close()
-                    } catch (_: Exception) {}
-                    exportStream = null
-                    exportFile = null
-                    f
-                }
-            runOnUiThread {
-                AlertDialog.Builder(this@WebAppActivity)
-                    .setTitle("Export bereit")
-                    .setItems(arrayOf("Auf Gerät speichern", "Mit anderer App teilen")) { _, choice
-                        ->
-                        if (choice == 0) {
-                            pendingSave?.delete()
-                            pendingSave = file
-                            val intent =
-                                Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-                                    addCategory(Intent.CATEGORY_OPENABLE)
-                                    type =
-                                        if (mime == "application/zip") "application/zip"
-                                        else "application/octet-stream"
-                                    putExtra(Intent.EXTRA_TITLE, file.name.substringAfter("-"))
-                                }
-                            try {
-                                startActivityForResult(intent, saveRequest)
-                            } catch (_: Exception) {
-                                pendingSave = null
-                                file.delete()
-                                Toast.makeText(
-                                        this@WebAppActivity,
-                                        "Speichern nicht verfügbar",
-                                        Toast.LENGTH_LONG,
-                                    )
-                                    .show()
-                            }
-                        } else {
-                            try {
-                                val uri =
-                                    FileProvider.getUriForFile(
-                                        this@WebAppActivity,
-                                        "${packageName}.files",
-                                        file,
-                                    )
-                                val send =
-                                    Intent(Intent.ACTION_SEND).apply {
-                                        type =
-                                            if (mime == "application/zip") "application/zip"
-                                            else "application/octet-stream"
-                                        putExtra(Intent.EXTRA_STREAM, uri)
-                                        clipData = ClipData.newUri(contentResolver, "Export", uri)
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                startActivity(Intent.createChooser(send, "Datei teilen"))
-                            } catch (_: Exception) {
-                                Toast.makeText(
-                                        this@WebAppActivity,
-                                        "Teilen fehlgeschlagen",
-                                        Toast.LENGTH_LONG,
-                                    )
-                                    .show()
-                            }
-                        }
-                    }
-                    .setNegativeButton("Abbrechen") { _, _ -> file.delete() }
-                    .show()
-            }
-            return true
-        }
-
-        @JavascriptInterface
-        fun abort() {
-            synchronized(exportLock) {
-                try {
-                    exportStream?.close()
-                } catch (_: Exception) {}
-                exportStream = null
-                exportFile?.delete()
-                exportFile = null
-            }
-        }
-    }
-
-    private val downloads = AndroidDownloads()
+    private lateinit var downloads: NativeFileDelivery
     private val appUrl = "https://appassets.androidplatform.net/android-bootstrap.html"
 
     override fun onCreate(state: Bundle?) {
@@ -195,6 +49,7 @@ open class WebAppActivity : Activity() {
         nativeFiles =
             NativeFiles(this) { source -> runOnUiThread { web.evaluateJavascript(source, null) } }
         nativeMedia = NativeMedia(this)
+        downloads = NativeFileDelivery(this)
         nativeNetwork =
             NativeNetwork(this, nativeMedia) { source ->
                 runOnUiThread { if (!isDestroyed) web.evaluateJavascript(source, null) }
@@ -327,6 +182,10 @@ open class WebAppActivity : Activity() {
         web.addJavascriptInterface(
             object {
                 @JavascriptInterface
+                fun versionName(): String =
+                    activityVersionName()
+
+                @JavascriptInterface
                 fun rotate(landscape: Boolean) {
                     runOnUiThread {
                         requestedOrientation =
@@ -369,6 +228,10 @@ open class WebAppActivity : Activity() {
         if (web.url.isNullOrEmpty()) web.loadUrl(appUrl)
     }
 
+    @Suppress("DEPRECATION")
+    private fun activityVersionName(): String =
+        packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
+
     protected open fun configureNativeBridge() {}
 
     protected fun handleSharedLogin(incoming: Intent?) {
@@ -410,39 +273,7 @@ open class WebAppActivity : Activity() {
             nativeFiles.picked(result, data)
             return
         }
-        if (code == saveRequest) {
-            val source = pendingSave
-            pendingSave = null
-            if (source != null) {
-                if (result == RESULT_OK && data?.data != null) {
-                    val target = data.data!!
-                    Thread {
-                            val saved =
-                                runCatching {
-                                        source.inputStream().use { input ->
-                                            val output =
-                                                contentResolver.openOutputStream(target, "w")
-                                                    ?: error("Nicht schreibbar")
-                                            output.use { input.copyTo(it, 65536) }
-                                        }
-                                    }
-                                    .isSuccess
-                            source.delete()
-                            runOnUiThread {
-                                Toast.makeText(
-                                        this,
-                                        if (saved) "Export gespeichert"
-                                        else "Speichern fehlgeschlagen",
-                                        Toast.LENGTH_LONG,
-                                    )
-                                    .show()
-                            }
-                        }
-                        .start()
-                } else source.delete()
-            }
-            return
-        }
+        if (downloads.onActivityResult(code, result, data)) return
         if (code != fileRequest) return
         val uris =
             if (result == RESULT_OK && data != null) {
@@ -501,8 +332,7 @@ open class WebAppActivity : Activity() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
         closeFullscreen()
-        downloads.abort()
-        pendingSave?.delete()
+        downloads.close()
         nativeNetwork.close()
         nativeFiles.close()
         nativeMedia.close()

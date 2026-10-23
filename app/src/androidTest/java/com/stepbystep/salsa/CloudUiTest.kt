@@ -56,6 +56,9 @@ class CloudUiTest {
         assertEquals(CloudUiActivity::class.java.name, launch.component!!.className)
         ActivityScenario.launch<CloudUiActivity>(launch).use { scenario ->
             await(scenario, "!!window.AndroidAppUI")
+            @Suppress("DEPRECATION")
+            val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            assertEquals(JSONObject.quote("Step by Step · Android $version"), js(scenario, "document.querySelector('#appVersion').textContent"))
             assertEquals(
                 "true",
                 js(
@@ -119,6 +122,71 @@ class CloudUiTest {
             await(scenario, "document.querySelector('#playerScreen').hidden && !document.querySelector('#playerScreen').classList.contains('is-native-fullscreen') && innerHeight>innerWidth")
             js(scenario, "(async()=>{const s=await import(new URL('./storage.js',location.href).href);const f=(await s.listFigures()).find(f=>f.id===window.physicalPlayerId);if(f)await s.deleteFigure(f);window.physicalPlayerCleaned=true;})()")
             await(scenario, "!!window.physicalPlayerCleaned")
+        }
+    }
+
+    @Test
+    fun nativeExportPickerCancellationRetriesTheSamePreparedBytes() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val device = androidx.test.uiautomator.UiDevice.getInstance(instrumentation)
+        val expected = ByteArray(196625) { (it % 251).toByte() }
+        val encoded = JSONObject.quote(Base64.encodeToString(expected, Base64.NO_WRAP))
+        val target = java.io.File(context.cacheDir, "exports/native-delivery-test.zip").apply {
+            parentFile!!.mkdirs(); writeText("previous target bytes")
+        }
+        var monitor: android.app.Instrumentation.ActivityMonitor? = null
+        try {
+            ActivityScenario.launch(CloudUiActivity::class.java).use { scenario ->
+                await(scenario, "!!window.AndroidAppUI && !!window.stepFileDelivery")
+                js(scenario, """
+                    (async()=>{
+                      const bytes=Uint8Array.from(atob($encoded),c=>c.charCodeAt(0));
+                      window.nativeExportResult=await stepFileDelivery.save(new File([bytes],'Native-Retry.zip',{type:'application/zip'}));
+                    })().catch(e=>window.nativeExportError=String(e))
+                """.trimIndent())
+                await(scenario, "window.nativeExportResult==='native'")
+                val saveText = androidx.test.uiautomator.By.text("Auf Gerät speichern")
+                assertNotNull(device.wait(androidx.test.uiautomator.Until.findObject(saveText), 10000))
+                monitor = instrumentation.addMonitor(
+                    android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                        addDataType("application/zip")
+                    },
+                    android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_CANCELED, null),
+                    true,
+                )
+                device.findObject(saveText).click()
+                assertNotNull(device.wait(androidx.test.uiautomator.Until.findObject(
+                    androidx.test.uiautomator.By.text("Speichern abgebrochen. Das Archiv bleibt bereit.")
+                ), 10000))
+                instrumentation.removeMonitor(monitor)
+                monitor = null
+                // The second choice reuses the staged archive: no second JS preparation occurs.
+                val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", target)
+                monitor = instrumentation.addMonitor(
+                    android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                        addDataType("application/zip")
+                    },
+                    android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,
+                        android.content.Intent().setData(uri)),
+                    true,
+                )
+                device.findObject(saveText).click()
+                val deadline = android.os.SystemClock.uptimeMillis() + 10000
+                while (android.os.SystemClock.uptimeMillis() < deadline && !target.readBytes().contentEquals(expected)) Thread.sleep(50)
+                assertArrayEquals(expected, target.readBytes())
+                assertTrue(device.wait(androidx.test.uiautomator.Until.gone(
+                    androidx.test.uiautomator.By.text("Datei speichern")
+                ), 10000))
+                assertNull(device.findObject(androidx.test.uiautomator.By.text("Export bereit")))
+                assertEquals("\"native\"", js(scenario, "window.nativeExportResult"))
+                assertEquals("true", js(scenario, "!window.nativeExportError"))
+            }
+        } finally {
+            monitor?.let { instrumentation.removeMonitor(it) }
+            target.delete()
         }
     }
 
