@@ -1,4 +1,4 @@
-// SalsaAppCloud UI reference: 0235a9f4925ad232a45eab7815240ecd33d64026.
+// SalsaAppCloud UI reference: e6ef7a697b20cc1b8690c269370fe32268b2e21a.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';

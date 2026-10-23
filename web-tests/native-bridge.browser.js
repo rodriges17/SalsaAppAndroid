@@ -289,3 +289,35 @@ test('native Android storage uses an information status without a browser permis
  assert.equal(await page.locator('#persistStorage').isVisible(),false);assert.match(await page.locator('#storageDetails').textContent(),/privaten Android-App-Speicher/);assert.equal(await page.evaluate(()=>persistCalls),0);
  }finally{await context.close();}
 });
+
+test('native delivery cancellation aborts partial files and a rejected start leaves the running export untouched',async()=>{
+ const {page,context}=await setup();try{
+ const result=await page.evaluate(async()=>{
+  const controller=new AbortController();let aborted=0,finished=0,error='';
+  AndroidDownloads.abort=()=>aborted++;AndroidDownloads.finish=()=>{finished++;return true;};
+  try{await stepFileDelivery.save(new File([new Uint8Array(160000)],'cancel.zip'),()=>controller.abort(),controller.signal);}catch(e){error=e.name;}
+  const parts=AndroidDownloads.parts.length;
+  AndroidDownloads.start=()=>false;try{await stepFileDelivery.save(new File(['x'],'busy.zip'));}catch{}
+  return {aborted,finished,error,parts};
+ });
+ assert.deepEqual(result,{aborted:1,finished:0,error:'AbortError',parts:1});
+ }finally{await context.close();}
+});
+
+test('legacy native Figur-ZIP passes cancellation through the shared delivery adapter',async()=>{
+ const {page,context}=await setup();try{
+ const f=await create(page);
+ const result=await page.evaluate(async f=>{
+  let entered=false,aborted=false;
+  stepFileDelivery.save=async(file,progress,signal)=>{
+   entered=true;if(!signal)throw Error('Missing cancellation signal');
+   await new Promise(resolve=>{signal.addEventListener('abort',()=>{aborted=true;resolve();},{once:true});
+    NativeModel.request(9002,'cancel',{});
+   });signal.throwIfAborted();
+  };
+  const reply=await new Promise(resolve=>{window.replies.set(9001,resolve);NativeModel.request(9001,'packageExport',{id:f.id,videos:f.videoIds});});
+  return {entered,aborted,error:reply.error};
+ },f);
+ assert.equal(result.entered,true);assert.equal(result.aborted,true);assert.ok(result.error);
+ }finally{await context.close();}
+});

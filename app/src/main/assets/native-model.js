@@ -36,11 +36,12 @@ import {cloudCall, loginWithLink, logout, uploadMedia, finishLogin} from './clou
 import {importFigure, exportFigure, packageFilename} from './package.js';
 import {posterPayload} from './cloud-posters.js';
 import {createBackupWorkflow} from './backup-workflow.js';
+import {saveFile} from './file-delivery.js';
 let uploadController=null,packageController=null;
 async function packageWork(work){if(packageController)throw new Error('Ein ZIP-Vorgang läuft bereits');const controller=new AbortController();packageController=controller;NativeUI.progress(JSON.stringify({busy:true,canCancel:true,message:'ZIP und Videos werden geprüft …'}));try{return await work(controller.signal);}finally{packageController=null;NativeUI.progress(JSON.stringify({busy:false,canCancel:false,message:''}));}}
 const backup=createBackupWorkflow(storage,{onChange:s=>{globalThis.NativeUI?.progress(JSON.stringify({busy:s.busy,canCancel:s.canCancel,message:s.message,progress:s.progress}));}});
 const snapshot=()=>{const s=backup.getState();return {...s,data:s.data?.parts instanceof Array?{...s.data,parts:s.data.parts.map(p=>({name:p.name,size:p.blob.size}))}:s.data};};
-async function deliver(blob,name,signal){signal?.throwIfAborted();if(!AndroidDownloads.start(name))throw new Error('Ein Export läuft bereits');try{for(let p=0;p<blob.size;p+=49152){signal?.throwIfAborted();if(!AndroidDownloads.chunk(bytes64(new Uint8Array(await blob.slice(p,p+49152).arrayBuffer()))))throw new Error('Export fehlgeschlagen');}signal?.throwIfAborted();if(!AndroidDownloads.finish(blob.type||'application/octet-stream'))throw new Error('Export fehlgeschlagen');return true;}catch(e){AndroidDownloads.abort();throw e;}}
+async function deliver(blob,name,signal){await saveFile(new File([blob],name,{type:blob.type||'application/octet-stream'}),{signal});return true;}
 async function newImport(data){const token=crypto.randomUUID();const f={id:crypto.randomUUID(),title:data.title,description:data.description,status:'Neu',tags:data.tags,importFingerprint:data.fingerprint};const records=data.drafts.map(d=>({...d,id:crypto.randomUUID()}));sessions.set(token,{figure:f,records});return{token,figure:await clean(f),videos:summary(records),duplicate:(await storage.listFigures()).some(f=>f.importFingerprint===data.fingerprint)};}
 Object.assign(operations,{
   async settings(){return {...await storage.storageSettings(),theme:window.stepAppearance.get(),estimate:await navigator.storage.estimate()};},
