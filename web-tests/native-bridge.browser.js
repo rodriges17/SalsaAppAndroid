@@ -429,3 +429,23 @@ test('Android folder close errors reach every waiter and release staging for an 
  assert.deepEqual(result,{errors:['NotAllowedError','NotAllowedError'],closes:1,aborts:1,empty:'',text:'erneut'});
  }finally{await context.close();}
 });
+
+test('cloud figure marks locally stored selection and disables duplicate download on Android',async()=>{
+ const {page,context}=await setup();try{
+ await page.evaluate(async()=>{
+  localStorage.setItem(`salsa-cloud-session:${new URL('./',location.href).pathname}:v1`,JSON.stringify({access_token:'account-a',refresh_token:'refresh-a',expires_at:Date.now()+3600000}));
+  const s=await import('./storage.js'),blob=await(await fetch('/fixture.mp4')).blob();
+  await s.saveFigure({id:'local-copy',title:'Renamed local figure',status:'Sitzt',tags:[],importFingerprint:'cloud:local-revision:v2,v1'},[{id:'v',name:'Video',blob,duration:1,confirmed:true}]);
+ });
+ await page.route('**/functions/v1/cloud',route=>{
+  const {action}=route.request().postDataJSON();
+  const state={me:{id:'A',email:'a@example.test',used:0,quota:500000000,upload_enabled:true},libraries:[],own_figures:[{id:'f',public_allowed:false,revisions:[{id:'local-revision',title:'Cloud Original',description:'',tags:[],created_at:'2026-10-23T00:00:00Z',videos:[{id:'v1',name:'One',size:20,type:'video/mp4'},{id:'v2',name:'Two',size:20,type:'video/mp4'}]}]}]};
+  return route.fulfill({contentType:'application/json',body:JSON.stringify(action==='state'?state:action==='poster_get'?{poster:null}:{ok:true})});
+ });
+ await page.locator('#cloudButton').click();await page.getByRole('heading',{name:'Cloud Original',exact:true}).waitFor();
+ const button=page.getByRole('button',{name:'✓ Lokal vorhanden',exact:true});await button.waitFor();
+ assert.equal(await button.isDisabled(),true);assert.equal(await page.locator('.cloud-local-status').first().textContent(),'✓ Bereits lokal vorhanden');
+ await page.getByLabel('One ·',{exact:false}).uncheck();assert.equal(await button.isDisabled(),true);
+ await page.getByLabel('Two ·',{exact:false}).uncheck();assert.equal(await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).isDisabled(),false);
+ }finally{await context.close();}
+});
