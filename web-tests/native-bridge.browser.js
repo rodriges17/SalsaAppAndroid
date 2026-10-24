@@ -22,8 +22,9 @@ async function setup(){const context=await browser.newContext();const page=await
  const save=()=>localStorage.setItem('mock-native-fs',JSON.stringify(fs));
  const decode=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));const encode=b=>{let s='';for(const c of b)s+=String.fromCharCode(c);return btoa(s);};
  const writers=new Map();
- window.AndroidFiles={pick(){setTimeout(()=>window.AndroidFSResult({root:'grant',path:'',name:'Android documents',kind:'directory'}));},call(raw){const a=JSON.parse(raw);let value;try{switch(a.op){case'permission':value='granted';break;case'child':{const path=[a.path,a.name].filter(Boolean).join('/');if(a.directory){if(!fs.dirs.includes(path)){if(!a.create)throw Error('NotFoundError');fs.dirs.push(path);}}else if(!(path in fs.files)){if(!a.create)throw Error('NotFoundError');fs.files[path]={data:'',time:1};}save();value={root:a.root,path,name:a.name,kind:a.directory?'directory':'file'};break;}case'list':value=[...fs.dirs,...Object.keys(fs.files)].filter(p=>p!==a.path&&p.startsWith(a.path?a.path+'/':'')&&!p.slice(a.path?a.path.length+1:0).includes('/')).map(p=>p.split('/').at(-1));break;case'stat':{const f=fs.files[a.path];if(!f)throw Error('NotFoundError');value={size:decode(f.data).length,lastModified:f.time,name:a.path.split('/').at(-1),url:'https://appassets.androidplatform.net/mock/'+encodeURIComponent(a.path)};break;}case'begin':value=crypto.randomUUID();writers.set(value,{path:a.path,parts:[]});break;case'write':writers.get(a.token).parts.push(decode(a.data));value=true;break;case'close':{const w=writers.get(a.token);const size=w.parts.reduce((s,p)=>s+p.length,0);const out=new Uint8Array(size);let p=0;w.parts.forEach(b=>{out.set(b,p);p+=b.length;});fs.files[w.path]={data:encode(out),time:Date.now()};save();writers.delete(a.token);value=true;break;}case'abort':writers.delete(a.token);value=true;break;case'remove':{const path=[a.path,a.name].filter(Boolean).join('/');if(!fs.files[path])throw Error('NotFoundError');delete fs.files[path];save();value=true;break;}default:throw Error('Unknown operation');}return JSON.stringify({value});}catch(e){return JSON.stringify({error:e.message,name:e.message==='NotFoundError'?'NotFoundError':'InvalidStateError'});}}};
- const fetchOriginal=window.fetch.bind(window);window.fetch=async(input,options)=>{const u=String(input);if(u.startsWith('https://appassets.androidplatform.net/mock/')){const f=fs.files[decodeURIComponent(u.split('/mock/')[1])];return new Response(f?decode(f.data):null,{status:f?200:404,headers:{'Content-Type':'application/octet-stream'}});}return fetchOriginal(input,options);};
+ window.fileCalls=[];window.pendingLibraryReads=[];window.holdLibraryReads=localStorage.getItem('hold-startup-library')==='yes';
+ window.AndroidFiles={pick(){setTimeout(()=>window.AndroidFSResult({root:'grant',path:'',name:'Android documents',kind:'directory'}));},call(raw){const a=JSON.parse(raw);window.fileCalls.push({op:a.op,path:a.path});let value;try{switch(a.op){case'permission':value=localStorage.getItem('deny-folder-access')==='yes'?'denied':'granted';break;case'child':{const path=[a.path,a.name].filter(Boolean).join('/');if(a.directory){if(!fs.dirs.includes(path)){if(!a.create)throw Error('NotFoundError');fs.dirs.push(path);}}else if(!(path in fs.files)){if(!a.create)throw Error('NotFoundError');fs.files[path]={data:'',time:1};}save();value={root:a.root,path,name:a.name,kind:a.directory?'directory':'file'};break;}case'list':value=[...fs.dirs,...Object.keys(fs.files)].filter(p=>p!==a.path&&p.startsWith(a.path?a.path+'/':'')&&!p.slice(a.path?a.path.length+1:0).includes('/')).map(p=>p.split('/').at(-1));break;case'stat':{const f=fs.files[a.path];if(!f)throw Error('NotFoundError');value={size:decode(f.data).length,lastModified:f.time,name:a.path.split('/').at(-1),url:'https://appassets.androidplatform.net/mock/'+encodeURIComponent(a.path)};break;}case'begin':value=crypto.randomUUID();writers.set(value,{path:a.path,parts:[]});break;case'write':writers.get(a.token).parts.push(decode(a.data));value=true;break;case'close':{const w=writers.get(a.token);const size=w.parts.reduce((s,p)=>s+p.length,0);const out=new Uint8Array(size);let p=0;w.parts.forEach(b=>{out.set(b,p);p+=b.length;});fs.files[w.path]={data:encode(out),time:Date.now()};save();writers.delete(a.token);value=true;break;}case'abort':writers.delete(a.token);value=true;break;case'remove':{const path=[a.path,a.name].filter(Boolean).join('/');if(!fs.files[path])throw Error('NotFoundError');delete fs.files[path];save();value=true;break;}default:throw Error('Unknown operation');}return JSON.stringify({value});}catch(e){return JSON.stringify({error:e.message,name:e.message==='NotFoundError'?'NotFoundError':'InvalidStateError'});}}};
+ const fetchOriginal=window.fetch.bind(window);window.fetch=async(input,options)=>{const u=String(input);if(u.startsWith('https://appassets.androidplatform.net/mock/')){if(decodeURIComponent(u).endsWith('/library.json')&&window.holdLibraryReads)await new Promise(resolve=>window.pendingLibraryReads.push(resolve));const f=fs.files[decodeURIComponent(u.split('/mock/')[1])];return new Response(f?decode(f.data):null,{status:f?200:404,headers:{'Content-Type':'application/octet-stream'}});}return fetchOriginal(input,options);};
  });await page.goto(origin+'/index.html');await page.waitForFunction(()=>window.nativeReady);return{context,page};}
 async function rpc(page,op,args={}){const reply=await page.evaluate(({op,args})=>new Promise(resolve=>{const id=Math.floor(Math.random()*1e9);window.replies.set(id,resolve);NativeModel.request(id,op,args);}),{op,args});if(reply.error)throw Error(reply.error);return reply.value;}
 async function add(page,session,name='Turn'){return rpc(page,'add',{token:session.token,url:origin+'/fixture.mp4',name,type:'video/mp4',duration:1,width:160,height:240});}
@@ -452,5 +453,42 @@ test('cloud figure marks locally stored selection and disables duplicate downloa
  assert.equal(await button.isDisabled(),true);assert.equal(await page.locator('.cloud-local-status').first().textContent(),'✓ Bereits lokal vorhanden');
  await page.getByLabel('One ·',{exact:false}).uncheck();assert.equal(await button.isDisabled(),true);
  await page.getByLabel('Two ·',{exact:false}).uncheck();assert.equal(await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).isDisabled(),false);
+ }finally{await context.close();}
+});
+
+
+test('Android startup shows cached figures and stays interactive while folder checks are pending',async()=>{
+ const {page,context}=await setup();try{
+  const app=await create(page,'App Figur');const folder=(await rpc(page,'folder',{action:'choose'})).activeFolder;
+  const copy=await rpc(page,'transfer',{id:app.id,target:folder});
+  await page.evaluate(()=>{
+   const fs=JSON.parse(localStorage.getItem('mock-native-fs'));
+   const media=Object.keys(fs.files).find(p=>p.includes('/media/'));delete fs.files[media];
+   localStorage.setItem('mock-native-fs',JSON.stringify(fs));localStorage.setItem('hold-startup-library','yes');
+  });
+  await page.reload();await page.waitForFunction(()=>window.nativeReady&&window.pendingLibraryReads.length>0);
+  assert.equal(await page.locator('.figure-card').count(),2);
+  assert.match(await page.locator(`[data-figure-id="${copy.id}"] .card-copy`).innerText(),/Wird geprüft/);
+  assert.equal(await page.evaluate(()=>fileCalls.filter(c=>c.op==='stat'&&c.path.includes('/media/')).length),0);
+  await page.locator('#search').fill('App Figur');assert.equal(await page.locator('.figure-card').count(),2);
+  await page.evaluate(()=>{window.holdLibraryReads=false;window.pendingLibraryReads.splice(0).forEach(resolve=>resolve());});
+  await page.waitForFunction(id=>document.querySelector(`[data-figure-id="${id}"] .card-copy`)?.textContent.includes('Videodatei fehlt'),copy.id);
+  assert.equal(await page.locator('#search').inputValue(),'App Figur');
+  assert.doesNotMatch(await page.locator(`[data-figure-id="${copy.id}"] .card-copy`).innerText(),/Wird geprüft/);
+ }finally{await context.close();}
+});
+
+test('cached Android folder summaries do not probe files or claim access after permission is revoked',async()=>{
+ const {page,context}=await setup();try{
+  const app=await create(page);const folder=(await rpc(page,'folder',{action:'choose'})).activeFolder;
+  const copy=await rpc(page,'transfer',{id:app.id,target:folder});
+  const result=await page.evaluate(async id=>{
+   const s=await import('./storage.js');window.fileCalls.length=0;localStorage.setItem('deny-folder-access','yes');
+   const cached=(await s.listFigures({cached:true})).find(f=>f.id===id);
+   const probes=window.fileCalls.length;
+   const verified=(await s.listFigures()).find(f=>f.id===id);
+   return {checking:cached.storageChecking,probes,accessRequired:verified.folderAccessRequired};
+  },copy.id);
+  assert.deepEqual(result,{checking:true,probes:0,accessRequired:true});
  }finally{await context.close();}
 });

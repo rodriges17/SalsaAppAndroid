@@ -1,4 +1,5 @@
-const APP_VERSION = '2026-10-24-library-links-v1';
+const APP_VERSION = '2026-10-24-fast-start-v1';
+import { createOverviewLoader } from './overview-loader.js';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -54,10 +55,13 @@ function placeFigureMenu(menu, anchor) {
 window.addEventListener('scroll', () => closeMenus(), { passive: true });
 window.addEventListener('resize', () => closeMenus());
 function closeMenus() { document.querySelectorAll('.card-menu').forEach(n => n.remove()); document.querySelectorAll('.card-options').forEach(n => n.setAttribute('aria-expanded', 'false')); }
-async function refresh() {
-  try { figures = await listFigures(); renderOverview(); }
-  catch (error) { $('empty').hidden = false; $('empty').replaceChildren(el('h2', '', 'Speicher nicht verfügbar'), el('p', '', storageMessage(error))); }
-}
+const overviewLoader = createOverviewLoader({
+  list: listFigures,
+  render: loaded => { figures = loaded; renderOverview(); },
+  failed: error => { $('empty').hidden = false; $('empty').replaceChildren(el('h2', '', 'Speicher nicht verfügbar'), el('p', '', storageMessage(error))); },
+  defer: work => requestAnimationFrame(() => setTimeout(work, 0))
+});
+const refresh = options => overviewLoader.refresh(options);
 function renderOverview() {
   closeMenus(); posterURLs.forEach(url => URL.revokeObjectURL(url)); posterURLs = [];
   const visible = filterFigures(figures, { query: $('search').value, status: statusFilter, tag: selectedTag, sort: $('sort').value });
@@ -74,7 +78,7 @@ function renderOverview() {
     else { thumb = el('span', 'card-thumb thumb-placeholder', '▷'); thumb.setAttribute('aria-hidden', 'true'); }
     const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title), el('span', 'card-status status-' + (figure.status === 'Sitzt' ? 'learned' : figure.status === 'Am Üben' ? 'practice' : 'new'), figure.status));
     if (figure.tags.length) copy.append(el('span', 'card-tags', figure.tags.join(' · ')));
-    if (figure.storageFolder) copy.append(el('span', 'card-meta', figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : figure.storageProblem ? `Geräteordner: ${figure.storageProblem}` : `Geräteordner · ${figure.folderName || 'SalsaTrainer'}`));
+    if (figure.storageFolder) copy.append(el('span', 'card-meta', figure.storageChecking ? `Geräteordner · ${figure.folderName || 'SalsaTrainer'} · Wird geprüft …` : figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : figure.storageProblem ? `Geräteordner: ${figure.storageProblem}` : `Geräteordner · ${figure.folderName || 'SalsaTrainer'}`));
     copy.append(el('span', 'card-meta', `${timeLabel(figure.duration)} · ${figure.videoIds.length} Video${figure.videoIds.length === 1 ? '' : 's'}`)); main.append(thumb, copy);
     const options = button('⋮', event => { event.stopPropagation(); const wasOpen = options.getAttribute('aria-expanded') === 'true'; closeMenus(); if (!wasOpen) showMenu(); }, 'card-options');
     options.setAttribute('aria-label', `Optionen für ${figure.title}`); options.setAttribute('aria-expanded', 'false');
@@ -615,8 +619,9 @@ async function chooseCloudImport({ title, fingerprint, revisionIds }) {
 initCloud({ confirm: confirmAction, localFigures: listFigures, chooseImport: chooseCloudImport, imported: async (imported, figure) => {
   await openEditor(figure ?? null, imported);
 } });
-try { await cleanupInterruptedImports(); } catch { /* Refresh reports unavailable storage. */ }
-await refresh();
+await refresh({ cached: true });
+// Old interrupted imports are housekeeping, not a prerequisite for the overview.
+requestAnimationFrame(() => setTimeout(() => { cleanupInterruptedImports().catch(() => {}); }, 0));
 
 // Android shell routes advanced workflows through the same controllers as the PWA.
 let incomingPreparation = null;

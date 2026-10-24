@@ -42,16 +42,18 @@ export async function chooseFolder() {
   chosenFolders.set(choice, folder);
   return choice;
 }
-async function readRegisteredFolder(folder) {
+async function readRegisteredFolder(folder, signal) {
+  signal?.throwIfAborted();
   await permission(folder.handle);
   const library = await readLibrary(folder.handle);
   if (library.id !== folder.id) throw new Error('Der Ordner enthält eine andere Bibliothek.');
+  signal?.throwIfAborted();
   await mirror(folder)(library);
   return library;
 }
-async function folderAvailability(folder) {
-  try { await readRegisteredFolder(folder); return { problem: '', accessRequired: false }; }
-  catch (error) { return { problem: error.message, accessRequired: error.code === 'folder-permission-required' }; }
+async function folderAvailability(folder, signal) {
+  try { await readRegisteredFolder(folder, signal); return { problem: '', accessRequired: false }; }
+  catch (error) { signal?.throwIfAborted(); return { problem: error.message, accessRequired: error.code === 'folder-permission-required' }; }
 }
 export async function connectFolder(choice) {
   const folder = chosenFolders.get(choice);
@@ -92,20 +94,34 @@ export async function backupFoldersNeedingAccess() {
   }
   return missing;
 }
-export async function listFigures() {
+// Cached summaries are for the first overview only, never proof of media access.
+export async function listFigures({ cached = false, signal, yieldToUI = false } = {}) {
+  const checkpoint = async () => {
+    signal?.throwIfAborted();
+    if (yieldToUI) await new Promise(resolve => setTimeout(resolve, 0));
+    signal?.throwIfAborted();
+  };
   const result = await app.listFigures();
   for (const folder of await folders()) {
-    const { problem, accessRequired } = await folderAvailability(folder);
+    await checkpoint();
+    if (cached) {
+      result.push(...folder.library.figures.map(f => ({ ...hydrateFolder(f, folder.id), folderName: folder.name, storageChecking: true })));
+      continue;
+    }
+    const { problem, accessRequired } = await folderAvailability(folder, signal);
+    signal?.throwIfAborted();
     for (const f of folder.library.figures) {
+      await checkpoint();
       let fileProblem = problem;
       if (!fileProblem) try {
         const media = await folder.handle.getDirectoryHandle('media');
         for (const v of f.videos) {
+          await checkpoint();
           const handle = await media.getFileHandle(v.file);
           const file = handle.getMetadata ? await handle.getMetadata() : await handle.getFile();
           if (file.size !== v.size || (v.modifiedAt != null && file.lastModified !== v.modifiedAt)) { fileProblem = 'Videodatei wurde verändert. Bitte bearbeiten und ersetzen.'; break; }
         }
-      } catch { fileProblem = 'Videodatei fehlt. Bitte bearbeiten und ersetzen.'; }
+      } catch (error) { signal?.throwIfAborted(); fileProblem = 'Videodatei fehlt. Bitte bearbeiten und ersetzen.'; }
       result.push({ ...hydrateFolder(f, folder.id), folderName: folder.name, storageProblem: fileProblem, folderAccessRequired: accessRequired });
     }
   }
