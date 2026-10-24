@@ -13,7 +13,7 @@ before(async()=>{
  browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE,headless:true,args:['--no-sandbox']});
 });
 after(async()=>{await browser?.close();await new Promise(r=>server?.close(r));});
-async function setup(){const context=await browser.newContext();const page=await context.newPage();await page.addInitScript(()=>{
+async function setup(contextOptions={}){const context=await browser.newContext(contextOptions);const page=await context.newPage();await page.addInitScript(()=>{
  window.nativeReady=false;window.replies=new Map();window.NativeUI={ready(){window.nativeReady=true;},result(id,json){const reply=window.replies.get(id);if(reply){window.replies.delete(id);reply(JSON.parse(json));}},progress(){},home(){}};
  window.NativeMedia={data:new Map(),begin(){const t=crypto.randomUUID();this.data.set(t,[]);return t;},chunk(t,b){this.data.get(t).push(b);return true;},finish(){return true;},abort(t){this.data.delete(t);}};
  window.AndroidPlatform={rotate(){},keepAwake(){},fullscreen(){}};
@@ -266,7 +266,7 @@ test('Android shows the saving message and activity indicator while video storag
 // Shared contract is byte-for-byte identical to the PWA's contract.
 const {PARITY_CASES,runParityCase}=await import('./parity-cases.js');
 for(const scenario of PARITY_CASES)test('shared feature contract: '+scenario,async()=>{
- const {page,context}=await setup();try{
+ const {page,context}=await setup(scenario==='navigation-return-hover'?{hasTouch:true,isMobile:true}:{});try{
   const errors=[];page.on('console',m=>{if(m.type()==='error'&&m.text().includes('Content Security Policy'))errors.push(m.text());});
   await page.reload();await page.waitForFunction(()=>window.nativeReady);await page.evaluate(()=>document.fonts.ready);
   await runParityCase(page,{root:'/',fixture:'/fixture.mp4',native:true,scenario,consoleErrors:errors});
