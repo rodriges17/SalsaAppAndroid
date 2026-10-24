@@ -24,6 +24,8 @@ async function setup(){const context=await browser.newContext();const page=await
  const writers=new Map();
  window.fileCalls=[];window.pendingLibraryReads=[];window.holdLibraryReads=localStorage.getItem('hold-startup-library')==='yes';
  window.AndroidFiles={pick(){setTimeout(()=>window.AndroidFSResult({root:'grant',path:'',name:'Android documents',kind:'directory'}));},call(raw){const a=JSON.parse(raw);window.fileCalls.push({op:a.op,path:a.path});let value;try{switch(a.op){case'permission':value=localStorage.getItem('deny-folder-access')==='yes'?'denied':'granted';break;case'child':{const path=[a.path,a.name].filter(Boolean).join('/');if(a.directory){if(!fs.dirs.includes(path)){if(!a.create)throw Error('NotFoundError');fs.dirs.push(path);}}else if(!(path in fs.files)){if(!a.create)throw Error('NotFoundError');fs.files[path]={data:'',time:1};}save();value={root:a.root,path,name:a.name,kind:a.directory?'directory':'file'};break;}case'list':value=[...fs.dirs,...Object.keys(fs.files)].filter(p=>p!==a.path&&p.startsWith(a.path?a.path+'/':'')&&!p.slice(a.path?a.path.length+1:0).includes('/')).map(p=>p.split('/').at(-1));break;case'stat':{const f=fs.files[a.path];if(!f)throw Error('NotFoundError');value={size:decode(f.data).length,lastModified:f.time,name:a.path.split('/').at(-1),url:'https://appassets.androidplatform.net/mock/'+encodeURIComponent(a.path)};break;}case'begin':value=crypto.randomUUID();writers.set(value,{path:a.path,parts:[]});break;case'write':writers.get(a.token).parts.push(decode(a.data));value=true;break;case'close':{const w=writers.get(a.token);const size=w.parts.reduce((s,p)=>s+p.length,0);const out=new Uint8Array(size);let p=0;w.parts.forEach(b=>{out.set(b,p);p+=b.length;});fs.files[w.path]={data:encode(out),time:Date.now()};save();writers.delete(a.token);value=true;break;}case'abort':writers.delete(a.token);value=true;break;case'remove':{const path=[a.path,a.name].filter(Boolean).join('/');if(!fs.files[path])throw Error('NotFoundError');delete fs.files[path];save();value=true;break;}default:throw Error('Unknown operation');}return JSON.stringify({value});}catch(e){return JSON.stringify({error:e.message,name:e.message==='NotFoundError'?'NotFoundError':'InvalidStateError'});}}};
+ const cacheKeys=caches.keys.bind(caches);window.pendingShellCleanup=[];
+ caches.keys=async()=>{if(localStorage.getItem('hold-shell-cleanup')==='yes')await new Promise(resolve=>window.pendingShellCleanup.push(resolve));return cacheKeys();};
  const fetchOriginal=window.fetch.bind(window);window.fetch=async(input,options)=>{const u=String(input);if(u.startsWith('https://appassets.androidplatform.net/mock/')){if(decodeURIComponent(u).endsWith('/library.json')&&window.holdLibraryReads)await new Promise(resolve=>window.pendingLibraryReads.push(resolve));const f=fs.files[decodeURIComponent(u.split('/mock/')[1])];return new Response(f?decode(f.data):null,{status:f?200:404,headers:{'Content-Type':'application/octet-stream'}});}return fetchOriginal(input,options);};
  });await page.goto(origin+'/index.html');await page.waitForFunction(()=>window.nativeReady);return{context,page};}
 async function rpc(page,op,args={}){const reply=await page.evaluate(({op,args})=>new Promise(resolve=>{const id=Math.floor(Math.random()*1e9);window.replies.set(id,resolve);NativeModel.request(id,op,args);}),{op,args});if(reply.error)throw Error(reply.error);return reply.value;}
@@ -467,6 +469,9 @@ test('Android startup shows cached figures and stays interactive while folder ch
    localStorage.setItem('mock-native-fs',JSON.stringify(fs));localStorage.setItem('hold-startup-library','yes');
   });
   await page.reload();await page.waitForFunction(()=>window.nativeReady&&window.pendingLibraryReads.length>0);
+  await page.evaluate(()=>{window.dispatchEvent(new Event('focus'));document.dispatchEvent(new Event('visibilitychange'));window.dispatchEvent(new Event('focus'));});
+  await page.waitForTimeout(100);
+  assert.equal(await page.evaluate(()=>window.pendingLibraryReads.length),1,'Lifecycle events restarted the startup scan');
   assert.equal(await page.locator('.figure-card').count(),2);
   assert.match(await page.locator(`[data-figure-id="${copy.id}"] .card-copy`).innerText(),/Wird geprüft/);
   assert.equal(await page.evaluate(()=>fileCalls.filter(c=>c.op==='stat'&&c.path.includes('/media/')).length),0);
@@ -490,5 +495,23 @@ test('cached Android folder summaries do not probe files or claim access after p
    return {checking:cached.storageChecking,probes,accessRequired:verified.folderAccessRequired};
   },copy.id);
   assert.deepEqual(result,{checking:true,probes:0,accessRequired:true});
+ }finally{await context.close();}
+});
+
+
+test('Android opens saved figures before obsolete shell cache deletion finishes',async()=>{
+ const {page,context}=await setup();try{
+  await page.goto(origin+'/assets/index.html');await page.waitForFunction(()=>window.nativeReady);
+  const figure=await create(page,'Schnell sichtbar');
+  await page.evaluate(async()=>{await caches.open('salsa-trainer:/assets/:obsolete-shell');localStorage.setItem('hold-shell-cleanup','yes');});
+  await page.goto(origin+'/android-bootstrap.html');await page.waitForURL(origin+'/assets/index.html');
+  await page.waitForFunction(()=>window.nativeReady&&window.pendingShellCleanup.length>0);
+  assert.equal(await page.locator(`[data-figure-id="${figure.id}"]`).count(),1);
+  await page.locator('#search').fill('keine Treffer');assert.equal(await page.locator('.figure-card').count(),0);
+  await page.evaluate(()=>{localStorage.removeItem('hold-shell-cleanup');window.pendingShellCleanup.splice(0).forEach(resolve=>resolve());});
+  await page.waitForFunction(async()=>!(await caches.keys()).includes('salsa-trainer:/assets/:obsolete-shell'));
+  const media=await rpc(page,'media',{id:figure.id,video:figure.videoIds[0]});
+  const bytes=await page.evaluate(token=>NativeMedia.data.get(token).flatMap(b=>Array.from(atob(b),c=>c.charCodeAt(0))),media.token);
+  assert.deepEqual(Buffer.from(bytes),await readFile(new URL('./fixtures/video.mp4',import.meta.url)));
  }finally{await context.close();}
 });

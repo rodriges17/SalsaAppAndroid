@@ -1,5 +1,6 @@
-const APP_VERSION = '2026-10-24-storage-choices-v1';
+const APP_VERSION = '2026-10-24-storage-confirm-v1';
 import { createOverviewLoader } from './overview-loader.js';
+import { retireAndroidShellCaches } from './android-shell-cleanup.js';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -117,7 +118,7 @@ function renderFilters() {
 }
 function changed() { channel?.postMessage('changed'); }
 channel?.addEventListener('message', () => refresh());
-window.addEventListener('focus', () => refresh());
+window.addEventListener('focus', () => overviewLoader.resume());
 $('search').addEventListener('input', renderOverview); $('sort').addEventListener('change', renderOverview);
 document.addEventListener('click', event => { if (!event.target.closest('.card-menu,.card-options')) closeMenus(); });
 $('tagsButton').onclick = () => {
@@ -385,12 +386,12 @@ function closePlayer() {
   $('playerScreen').hidden = true; $('overview').hidden = false; $('overview').inert = false; document.body.classList.remove('playing-screen');
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); if (video.webkitDisplayingFullscreen) video.webkitExitFullscreen();
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden) { pause(); previewVideo.pause(); } else refresh(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { pause(); previewVideo.pause(); } else overviewLoader.resume(); });
 window.addEventListener('pagehide', () => { pause(); previewVideo.pause(); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && learning && !document.fullscreenElement) { event.preventDefault(); history.back(); } });
 
 
-let deviceBusy = false;
+let deviceBusy = false, storageChoicePending = false;
 async function deviceWork(work) {
   if (deviceBusy) return; deviceBusy = true; $('closeInfo').disabled = true; $('closeInfoTop').disabled = true;
   $('deviceStorageStatus').textContent = 'Bitte warten …';
@@ -403,33 +404,61 @@ async function renderDeviceStorage() {
   const settings = await storageSettings(), controls = $('deviceStorageControls'); controls.replaceChildren();
   const selected = settings.folders.find(f => f.id === settings.activeFolder);
   $('deviceStorageActive').textContent = `Neue Figuren: ${selected ? 'Geräteordner „' + selected.name + '“' : 'App-Speicher'}. Vorhandene Figuren bleiben an ihrem bisherigen Speicherort.`;
-  const confirmed = label => { const control = button('✓ ' + label, () => {}, 'secondary storage-confirmed'); control.disabled = true; return control; };
-  controls.append(!selected ? confirmed('App-Speicher für neue Figuren aktiv') : button('App-Speicher verwenden', () => deviceWork(() => setStorageFolder(null)), 'secondary'));
-  if (settings.supported) {
-    controls.append(button(settings.folders.length ? 'Weiteren Geräteordner auswählen' : 'Geräteordner auswählen', async () => {
-      // Open the OS picker directly in the click handler, before any other async work.
+  const choices = el('div', 'storage-options'); choices.setAttribute('role', 'group'); choices.setAttribute('aria-label', 'Speicherort für neue Figuren');
+  choices.append(el('strong', '', 'Neue Figuren speichern in …'));
+  function choice(id, title, detail, active, action, unavailable = false) {
+    const control = button('', action, 'storage-choice'); control.dataset.storageTarget = id;
+    control.setAttribute('aria-label', title); control.setAttribute('aria-pressed', String(active));
+    const mark = el('span', 'storage-choice-mark'); mark.setAttribute('aria-hidden', 'true');
+    const description = el('small', 'storage-choice-detail', detail); description.id = `storage-choice-${id}-detail`;
+    control.setAttribute('aria-describedby', description.id);
+    control.append(mark, el('span', 'storage-choice-title', title), description);
+    control.disabled = active || unavailable;
+    return control;
+  }
+  async function changeStorage(id, name) {
+    if (deviceBusy || storageChoicePending || id === settings.activeFolder) return;
+    storageChoicePending = true;
+    try {
+      const destination = id ? `im Geräteordner „${name}“` : 'im App-Speicher';
+      if (!await confirmAction({ title: 'Speicherort wechseln?', message: `Neue Figuren künftig ${destination} speichern? Vorhandene Figuren und Videos bleiben an ihrem bisherigen Speicherort.`, ok: 'Wechseln' })) return;
+      await deviceWork(async () => {
+        if (id) await allowFolderAccess(id);
+        await setStorageFolder(id);
+      });
+    } finally { storageChoicePending = false; }
+  }
+  async function chooseDeviceFolder() {
+    if (deviceBusy || storageChoicePending) return;
+    storageChoicePending = true;
+    try {
+      // Open the OS picker directly in this click task. Choosing a folder does
+      // not change the default until the following app confirmation is accepted.
       let candidate; try { candidate = await chooseFolder(); } catch (e) { if (e.name !== 'AbortError') $('deviceStorageStatus').textContent = storageMessage(e); return; }
       const count = candidate.figureCount;
       if (!await confirmAction({ title: count ? 'Bibliotheksordner öffnen?' : 'Geräteordner verwenden?', message: `„${candidate.name}“ enthält ${count} Figuren. Videos, Angaben und Lernstände werden eingelesen. Neue Figuren werden hier gespeichert. Vorhandene App-Figuren werden nicht verschoben.`, ok: count ? 'Bibliothek öffnen' : 'Ordner verwenden' })) return;
       await deviceWork(() => connectFolder(candidate));
-    }, 'secondary'));
-  } else controls.append(el('p', 'muted', 'Geräteordner werden in diesem Browser nicht unterstützt. Verwende aktuelles Chrome auf Android oder Desktop. Auf iPhone/Safari bleibt der App-Speicher mit ZIP-Sicherung verfügbar.'));
-  for (const folder of settings.folders) {
-    const row = el('div', 'cloud-card'); row.dataset.folderId = folder.id;
-    row.append(el('strong', '', `✓ ${folder.name} · ${folder.figureCount} Figur${folder.figureCount === 1 ? '' : 'en'} · verbunden`));
-    if (settings.supported) {
-      const granted = folder.access === 'granted', active = folder.id === settings.activeFolder;
-      row.append(granted ? confirmed('Ordnerzugriff erlaubt') : button('Ordnerzugriff erlauben', () => deviceWork(() => allowFolderAccess(folder.id)), 'secondary'));
-      if (active && granted) row.append(confirmed('Für neue Figuren aktiv'));
-      else if (active) {
-        const waiting = button('Für neue Figuren ausgewählt', () => {}, 'secondary'); waiting.disabled = true; row.append(waiting);
-        row.append(el('p', 'error', 'Für neue Figuren ausgewählt. Bitte den Ordnerzugriff erlauben, bevor du hier speicherst.'));
-      } else row.append(button('Für neue Figuren verwenden', () => deviceWork(async () => { await allowFolderAccess(folder.id); await setStorageFolder(folder.id); }), 'secondary'));
-      if (folder.access === 'unavailable') row.append(el('p', 'error', 'Der Ordnerzugriff konnte nicht geprüft werden. Bitte erneut erlauben oder den Ordner neu auswählen.'));
-    }
-    if (folder.pendingCleanup) row.append(el('p', 'error', 'Dateibereinigung ausstehend. Sie wird beim nächsten Speichern oder Löschen erneut versucht.'));
-    controls.append(row);
+    } finally { storageChoicePending = false; }
   }
+  choices.append(choice('app', 'App-Speicher', !settings.activeFolder ? 'Privat in dieser App · Für neue Figuren aktiv' : 'Privat in dieser App', !settings.activeFolder, () => changeStorage(null, 'App-Speicher')));
+  for (const folder of settings.folders) {
+    const row = el('div', 'storage-folder'); row.dataset.folderId = folder.id;
+    const granted = folder.access === 'granted', active = folder.id === settings.activeFolder;
+    const detail = `${folder.figureCount} Figur${folder.figureCount === 1 ? '' : 'en'} · ${active ? granted ? 'Für neue Figuren aktiv' : 'Ausgewählt · Zugriff erforderlich' : granted ? 'Für neue Figuren auswählen' : 'Zugriff erforderlich'}`;
+    row.append(choice(folder.id, folder.name, detail, active, () => changeStorage(folder.id, folder.name), !settings.supported));
+    const status = el('p', 'storage-access-state', granted ? '✓ Verbunden · Zugriff erlaubt' : 'Verbunden · Zugriff erforderlich');
+    status.dataset.state = granted ? 'granted' : 'required'; row.append(status);
+    if (settings.supported && !granted) row.append(button('Ordnerzugriff erlauben', () => deviceWork(() => allowFolderAccess(folder.id)), 'secondary'));
+    if (active && !granted && settings.supported) row.append(el('p', 'error', 'Bitte den Ordnerzugriff erlauben, bevor du hier speicherst.'));
+    if (folder.access === 'unavailable') row.append(el('p', 'error', 'Der Ordnerzugriff konnte nicht geprüft werden. Bitte erneut erlauben oder den Ordner neu auswählen.'));
+    if (folder.pendingCleanup) row.append(el('p', 'error', 'Dateibereinigung ausstehend. Sie wird beim nächsten Speichern oder Löschen erneut versucht.'));
+    choices.append(row);
+  }
+  if (settings.supported) {
+    if (settings.folders.length) choices.append(button('Weiteren Geräteordner auswählen', chooseDeviceFolder, 'secondary'));
+    else choices.append(choice('choose', 'Geräteordner auswählen', 'Videos in einem Ordner auf diesem Gerät', false, chooseDeviceFolder));
+  } else choices.append(el('p', 'muted', 'Geräteordner werden in diesem Browser nicht unterstützt. Verwende aktuelles Chrome auf Android oder Desktop. Auf iPhone/Safari bleibt der App-Speicher mit ZIP-Sicherung verfügbar.'));
+  controls.append(choices);
 }
 async function moveFigure(figure) {
   if (opening || editor || learning) return; opening = true;
@@ -632,7 +661,10 @@ initCloud({ confirm: confirmAction, localFigures: listFigures, chooseImport: cho
 } });
 await refresh({ cached: true });
 // Old interrupted imports are housekeeping, not a prerequisite for the overview.
-requestAnimationFrame(() => setTimeout(() => { cleanupInterruptedImports().catch(() => {}); }, 0));
+requestAnimationFrame(() => setTimeout(() => {
+  cleanupInterruptedImports().catch(() => {});
+  if (window.AndroidPlatform) retireAndroidShellCaches().catch(() => {});
+}, 0));
 
 // Android shell routes advanced workflows through the same controllers as the PWA.
 let incomingPreparation = null;

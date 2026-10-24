@@ -30,3 +30,17 @@ test('app-only overview needs no second read and failed checks preserve visible 
  const error=Error('unavailable');const f=setup(options=>options.cached?[{storageChecking:true}]:Promise.reject(error));
  await f.refresh({cached:true});await f.deferred.shift()();assert.equal(f.rendered.length,1);assert.deepEqual(f.errors,[error]);
 });
+
+test('focus and visibility reuse both a pending first overview and its background check',async()=>{
+ const first=pending(),check=pending();let calls=0;
+ const h=setup(()=>++calls===1?first.promise:check.promise);
+ const opened=h.refresh({cached:true});h.resume();h.resume();assert.equal(calls,1);
+ first.resolve([{storageChecking:true}]);await opened;
+ h.resume();assert.equal(calls,1,'scheduled validation was restarted');
+ const done=h.deferred.shift()();h.resume();h.resume();assert.equal(calls,2,'in-flight validation was restarted');
+ check.resolve([{id:'verified'}]);await done;assert.equal(h.rendered.at(-1)[0].id,'verified');
+});
+test('returning to an idle overview renders summaries before revalidating folders',async()=>{
+ const calls=[];const h=setup(options=>{calls.push(options);return[{id:'app'}];});
+ await h.refresh();await h.resume();assert.equal(calls.length,2);assert.equal(calls[1].cached,true);
+});
