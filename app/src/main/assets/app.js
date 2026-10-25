@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-25-guest-navigation-v2';
+const APP_VERSION = '2026-10-25-library-download-v1';
 import { createOverviewLoader } from './overview-loader.js';
 import { retireAndroidShellCaches } from './android-shell-cleanup.js';
 import { initBackup } from './backup-ui.js';
@@ -667,7 +667,7 @@ async function chooseCloudImport({ title, fingerprint, revisionIds }) {
     document.body.append(dialog); dialog.showModal(); actions.firstChild.focus();
   });
 }
-initCloud({ confirm: confirmAction, closed: () => { if (!$('overview').hidden) focusFiguresNavigation(); }, localFigures: listFigures, chooseImport: chooseCloudImport, imported: async (imported, figure) => {
+initCloud({ confirm: confirmAction, closed: () => { if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, imported: async (imported, figure) => {
   await openEditor(figure ?? null, imported);
 } });
 await refresh({ cached: true });
