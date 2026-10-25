@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-25-guest-libraries-v1';
+const APP_VERSION = '2026-10-25-guest-navigation-v2';
 import { createOverviewLoader } from './overview-loader.js';
 import { retireAndroidShellCaches } from './android-shell-cleanup.js';
 import { initBackup } from './backup-ui.js';
