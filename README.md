@@ -1,5 +1,7 @@
 # Step by Step – Android 0.7.22
 
+[Cloud-Speicher und Figurenreferenzen](docs/CLOUD-SPEICHER.md)
+
 ## Kurzanleitungen
 
 - **[Bibliotheken teilen](https://rodriges17.github.io/SalsaAppCloud/anleitungen/teilen.html)**
