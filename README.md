@@ -1,5 +1,13 @@
 # Step by Step – Android 0.7.22
 
+## Kurzanleitungen
+
+- **[Bibliotheken teilen](https://rodriges17.github.io/SalsaAppCloud/anleitungen/teilen.html)**
+- **[Personen & Zugriff verwalten](https://rodriges17.github.io/SalsaAppCloud/anleitungen/benutzerverwaltung.html)**
+
+Die Anleitungen gelten für Android und Cloud-PWA. Die eigenständigen [HTML-Dateien liegen im Cloud-Repository](https://github.com/rodriges17/SalsaAppCloud/tree/main/pwa/anleitungen).
+
+
 Android-App ab Android 8 (API 26) mit derselben Oberfläche wie SalsaAppCloud: identische Seiten, Navigation, Karten, Dialoge und Hell-/Dunkeldesign. Die Oberfläche ist lokal im APK enthalten; eine Internetverbindung ist nur für Cloud-Inhalte erforderlich.
 
 ## Funktionsumfang
