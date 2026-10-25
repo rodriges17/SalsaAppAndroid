@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-25-guest-publish-v1';
+const APP_VERSION = '2026-10-25-direct-import-v1';
 import { createOverviewLoader } from './overview-loader.js';
 import { retireAndroidShellCaches } from './android-shell-cleanup.js';
 import { initBackup } from './backup-ui.js';
@@ -670,9 +670,7 @@ async function chooseCloudImport({ title, fingerprint, revisionIds }) {
     document.body.append(dialog); dialog.showModal(); actions.firstChild.focus();
   });
 }
-initCloud({ confirm: confirmAction, closed: () => { if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, imported: async (imported, figure) => {
-  await openEditor(figure ?? null, imported);
-} });
+initCloud({ confirm: confirmAction, closed: () => { if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, localSaved: () => toast('Figur lokal gespeichert.') });
 await refresh({ cached: true });
 // Old interrupted imports are housekeeping, not a prerequisite for the overview.
 requestAnimationFrame(() => setTimeout(() => {
