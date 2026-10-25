@@ -4,7 +4,9 @@ import { createPeopleView } from './cloud-people.js';
 import { cloudReadState, contentState } from './cloud-read-state.js';
 import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, loginWithPassword, setAdminPassword, cloudIdentity } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
-import { figureVideos } from './storage.js';
+import { figureVideos, figureMedia } from './storage.js';
+import { localVideoContent, matchingLocalVideos } from './cloud-local-content.js';
+import { readCloudCache, writeCloudCache, cloudCacheRevision } from './cloud-cache.js';
 import { createCloudLocalIndex } from './cloud-local.js';
 const localIndex = createCloudLocalIndex({ getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) }, `salsa-cloud-local:${new URL('./', import.meta.url).pathname}:v1`);
 import { createPosterView, posterPayload } from './cloud-posters.js';
@@ -52,6 +54,27 @@ function focusSection(box) {
 }
 let viewEpoch = 0, statusTimer, displayedOwner = null, renderedView = null, authReloadPending = false;
 let localUpdates = [];
+let localContent = new Map();
+const mediaHashRequests = new Map();
+async function cloudMediaHash(payload) {
+  const owner = cloudIdentity(), generation = cloudCacheRevision(owner);
+  const key = `media-hash:${payload.revision}:${payload.media}`;
+  const requestKey = JSON.stringify([owner, generation, key]);
+  if (mediaHashRequests.has(requestKey)) return mediaHashRequests.get(requestKey);
+  const work = (async () => {
+    const saved = await readCloudCache(owner, key);
+    if (owner !== cloudIdentity() || generation !== cloudCacheRevision(owner)) throw new Error('Cloud-Ansicht wurde geändert.');
+    if (saved?.value.content_hash) return saved.value;
+    const media = await cloudCall('media', payload);
+    // Revision media is immutable. Store just the hash, never paths or signed URLs.
+    const value = { content_hash: media.content_hash };
+    if (/^[a-f0-9]{64}$/.test(value.content_hash) && owner === cloudIdentity()) await writeCloudCache(owner, key, value, generation);
+    return value;
+  })();
+  mediaHashRequests.set(requestKey, work);
+  try { return await work; } finally { mediaHashRequests.delete(requestKey); }
+}
+const sameContent = (a, b) => a.size === b.size && [...a].every(([size, hashes]) => hashes.size === b.get(size)?.size && [...hashes].every(hash => b.get(size).has(hash)));
 function cacheStatus(message, temporary = false) {
   clearTimeout(statusTimer); statusBox.textContent = message;
   if (temporary) statusTimer = setTimeout(() => { if (!busy) statusBox.textContent = ''; }, 3500);
@@ -70,7 +93,12 @@ async function load(library = current, allowCache = false) {
     current = library;
     const active = () => epoch === viewEpoch && dialog.open && owner === cloudIdentity();
     void Promise.resolve().then(() => hooks.localFigures()).then(figures => {
-      if (active()) { localFigures = figures; localUpdates.forEach(update => update()); }
+      if (active()) {
+        localFigures = figures; localUpdates.forEach(update => update());
+        void localVideoContent(figures, figureMedia, active).then(content => {
+          if (active() && !sameContent(localContent, content)) { localContent = content; localUpdates.forEach(update => update()); }
+        });
+      }
       return figures;
     }).catch(() => localFigures);
     const reusable = !!allowCache && !source && ['initial', 'figures', 'libraries'].includes(area);
@@ -267,13 +295,21 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
   const repair = action('Lokale Kopie erneut herunterladen', download); repair.className = 'subtle'; repair.hidden = true;
   if (own) take.className = 'primary';
   box.append(take, repair);
+  let checkedContent, contentMatches = new Set();
   const update = () => {
+    if (checkedContent !== localContent) {
+      checkedContent = localContent; contentMatches = new Set();
+      const content = localContent;
+      void matchingLocalVideos(rev, content, cloudMediaHash, () => dialog.open && box.isConnected && content === localContent).then(matches => {
+        if (box.isConnected && content === localContent) { contentMatches = matches; update(); }
+      });
+    }
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
     const prefix = `cloud:${rev.id}:`;
     const linked = localIndex.availability(state.me?.id, rev.id, localFigures);
     const selections = [...localFigures.filter(f => f.importFingerprint?.startsWith(prefix))
       .map(f => new Set(f.importFingerprint.slice(prefix.length).split(','))), ...linked.available];
-    const available = new Set(selections.flatMap(ids => [...ids]));
+    const available = new Set([...selections.flatMap(ids => [...ids]), ...contentMatches]);
     const accessRequired = linked.accessRequired.some(ids => rev.videos.some(v => ids.has(v.id) && !available.has(v.id)));
     const exists = selected.length > 0 && selected.every(v => available.has(v.id));
     const complete = rev.videos.every(v => available.has(v.id));

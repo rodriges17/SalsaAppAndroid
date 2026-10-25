@@ -534,3 +534,25 @@ test('Android cloud shows platform role and expands person details inline',async
  await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();assert.equal(await page.getByLabel('Vollständige E-Mail-Adresse',{exact:true}).count(),0);await page.locator('.cloud-member-summary').filter({hasText:'writer@example.test'}).click();assert.equal(await page.locator('.cloud-member-details').count(),1);await page.getByRole('button',{name:'Mitglied hinzufügen',exact:true}).click();await page.getByRole('button',{name:'reader@example.test',exact:true}).click();assert.equal(await page.getByLabel('Bibliotheksrolle',{exact:true}).last().locator('option').count(),1);await page.getByRole('button',{name:'Abbrechen',exact:true}).click();assert.equal(calls.some(c=>c.action==='member'),false);
  }finally{await context.close();}
 });
+
+test('Android cloud matching reuses folder hashes without transferring videos and invalidates changed files',async()=>{
+ const {page,context}=await setup();try {
+  const original=await create(page);const folder=(await rpc(page,'folder',{action:'choose'})).activeFolder;
+  const copy=await rpc(page,'transfer',{id:original.id,target:folder});
+  const scan=()=>page.evaluate(async({id,folder})=>{
+   const {listFigures,figureMedia}=await import('./storage.js');
+   const {localVideoContent}=await import('./cloud-local-content.js');
+   let transfers=0;const previous=window.fetch;
+   window.fetch=async(input,options)=>{if(decodeURIComponent(String(input)).includes('/media/'))transfers++;return previous(input,options);};
+   try {const figures=(await listFigures()).filter(f=>f.id===id&&f.storageFolder===folder);const result=await localVideoContent(figures,figureMedia);return {transfers,matches:result.size};}
+   finally {window.fetch=previous;}
+  },{id:copy.id,folder});
+  assert.deepEqual(await scan(),{transfers:1,matches:1});
+  assert.deepEqual(await scan(),{transfers:0,matches:1});
+  await page.reload();await page.waitForFunction(()=>window.nativeReady);
+  assert.deepEqual(await scan(),{transfers:0,matches:1});
+  await page.evaluate(()=>{const fs=JSON.parse(localStorage.getItem('mock-native-fs'));for(const [path,f] of Object.entries(fs.files))if(path.includes('/media/'))f.time+=10000;localStorage.setItem('mock-native-fs',JSON.stringify(fs));});
+  await page.reload();await page.waitForFunction(()=>window.nativeReady);
+  assert.deepEqual(await scan(),{transfers:0,matches:0});
+ } finally {await context.close();}
+});
