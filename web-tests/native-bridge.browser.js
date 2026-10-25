@@ -515,3 +515,21 @@ test('Android opens saved figures before obsolete shell cache deletion finishes'
   assert.deepEqual(Buffer.from(bytes),await readFile(new URL('./fixtures/video.mp4',import.meta.url)));
  }finally{await context.close();}
 });
+
+test('Android cloud shows platform role and expands person details inline',async()=>{
+ const {page,context}=await setup();try{
+ await page.route('**/cloud-config.js',r=>r.fulfill({contentType:'text/javascript',body:`export const CLOUD_URL='${origin}';export const CLOUD_KEY='test';export const CLOUD_FILE_LIMIT=50000000;`}));
+ const calls=[];
+ await page.route(origin+'/functions/v1/cloud',async route=>{
+ const {action,payload}=route.request().postDataJSON();calls.push({action,payload});
+ const result=action==='state'?{me:{id:'admin',email:'admin@example.test',is_admin:true,upload_enabled:true,quota:500000000,used:0},settings:{used:0,total_limit:900000000},people:[{id:'reader',email:'reader@example.test',upload_enabled:false,quota:250000000,used:0},{id:'writer',email:'writer@example.test',upload_enabled:true,quota:250000000,used:0}],libraries:[],own_figures:[]}:action==='admin_access'?{memberships:[]}:action==='admin_link'?{link:'https://example.invalid/?type=magiclink&token_hash=demo',expires_at:null}:{ok:true};
+ await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
+ });
+ await page.evaluate(()=>localStorage.setItem('salsa-cloud-session:/:v1',JSON.stringify({access_token:'test-jwt',refresh_token:'test-refresh',expires_at:Date.now()+3600000})));
+ await page.reload();await page.waitForFunction(()=>window.nativeReady);await page.locator('#cloudButton').click();await page.getByText('Plattform-Administrator',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).click();const writer=page.locator('.cloud-person-summary').filter({hasText:'writer@example.test'}),reader=page.locator('.cloud-person-summary').filter({hasText:'reader@example.test'});
+ await writer.click();assert.equal(await writer.getAttribute('aria-expanded'),'true');await reader.click();assert.equal(await writer.getAttribute('aria-expanded'),'false');assert.equal(await page.locator('.cloud-person-details').count(),1);
+ await writer.click();await page.getByLabel('Figuren hochladen und Bibliotheken erstellen',{exact:true}).uncheck();await page.getByRole('button',{name:'Änderungen speichern',exact:true}).click();await page.locator('#confirmCancel').click();assert.equal(calls.some(c=>c.action==='admin_user'),false);
+ await page.getByRole('button',{name:'Neuen Anmeldelink erstellen',exact:true}).click();await page.getByLabel('Einmaliger persönlicher Anmeldelink',{exact:true}).waitFor();assert.match(await page.locator('.cloud-login-link').innerText(),/genaue Ablaufzeit ist derzeit nicht bestätigt/);
+ }finally{await context.close();}
+});

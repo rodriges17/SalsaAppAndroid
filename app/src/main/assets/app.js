@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-24-sort-focus-v1';
+const APP_VERSION = '2026-10-25-people-access-v1';
 import { createOverviewLoader } from './overview-loader.js';
 import { retireAndroidShellCaches } from './android-shell-cleanup.js';
 import { initBackup } from './backup-ui.js';

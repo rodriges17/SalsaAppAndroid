@@ -10,8 +10,8 @@ android {
         minSdk = 26
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = providers.gradleProperty("stepVersionCode").map { it.toInt() }.getOrElse(38)
-        versionName = "0.7.31"
+        versionCode = providers.gradleProperty("stepVersionCode").map { it.toInt() }.getOrElse(39)
+        versionName = "0.7.32"
     }
     // Distribution builds use an explicitly restored key. Local/emulator-only debug builds
     // retain Android's normal debug identity and are never published by the workflow.
