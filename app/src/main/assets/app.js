@@ -109,6 +109,9 @@ function renderOverview() {
     }
     main.addEventListener('contextmenu', event => { event.preventDefault(); closeMenus(); showMenu(); });
     card.append(main, options, statusBar);
+    if (figure.storageChecking) {
+      const notice = el('span', 'card-storage-notice folder-access-action small muted', 'Ordner wird geprüft …'); notice.setAttribute('role', 'status'); card.append(notice);
+    }
     if (figure.folderAccessRequired || figure.storageProblem) {
       card.append(el('span', 'card-storage-warning', figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : `Geräteordner: ${figure.storageProblem}`));
     }
