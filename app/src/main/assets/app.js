@@ -83,10 +83,17 @@ function renderOverview() {
     if (figure.poster) { const url = URL.createObjectURL(figure.poster); posterURLs.push(url); thumb = el('img', 'card-thumb'); thumb.src = url; thumb.alt = ''; }
     else { thumb = el('span', 'card-thumb thumb-placeholder', '▷'); thumb.setAttribute('aria-hidden', 'true'); }
     const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title), el('span', 'card-status status-' + (figure.status === 'Sitzt' ? 'learned' : figure.status === 'Am Üben' ? 'practice' : 'new'), figure.status));
-    const cloudStatus = cloudLocalIndex.status(figure), badge = el('span', 'card-provenance', provenanceIcon(cloudStatus)); badge.title = provenanceLabel(cloudStatus); badge.setAttribute('aria-label', badge.title); badge.dataset.cloudStatus = cloudStatus; copy.prepend(badge);
     if (figure.tags.length) copy.append(el('span', 'card-tags', figure.tags.join(' · ')));
-    if (figure.storageFolder) copy.append(el('span', 'card-meta', figure.storageChecking ? `Geräteordner · ${figure.folderName || 'SalsaTrainer'} · Wird geprüft …` : figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : figure.storageProblem ? `Geräteordner: ${figure.storageProblem}` : `Geräteordner · ${figure.folderName || 'SalsaTrainer'}`));
-    copy.append(el('span', 'card-meta', `${timeLabel(figure.duration)} · ${figure.videoIds.length} Video${figure.videoIds.length === 1 ? '' : 's'}`)); main.append(thumb, copy);
+    main.append(thumb, copy);
+    const statusBar = el('div', 'card-storage-status');
+    const cloudStatus = cloudLocalIndex.status(figure);
+    const badge = button('', () => toast(provenanceLabel(cloudStatus)), 'card-provenance');
+    badge.innerHTML = provenanceIcon(cloudStatus); badge.title = provenanceLabel(cloudStatus);
+    badge.setAttribute('aria-label', badge.title); badge.dataset.cloudStatus = cloudStatus;
+    const folderName = figure.storageFolder ? figure.folderName || 'SalsaTrainer' : 'App-Speicher';
+    const folder = el('span', 'card-storage-folder', folderName); folder.title = folderName;
+    const metadata = el('span', 'card-meta', `${timeLabel(figure.duration)} · ${figure.videoIds.length} Video${figure.videoIds.length === 1 ? '' : 's'}`);
+    statusBar.append(badge, folder, metadata);
     const options = button('⋮', event => { event.stopPropagation(); const wasOpen = options.getAttribute('aria-expanded') === 'true'; closeMenus(); if (!wasOpen) showMenu(); }, 'card-options');
     options.setAttribute('aria-label', `Optionen für ${figure.title}`); options.setAttribute('aria-expanded', 'false');
     function showMenu() {
@@ -101,7 +108,10 @@ function renderOverview() {
       placeFigureMenu(menu, options);
     }
     main.addEventListener('contextmenu', event => { event.preventDefault(); closeMenus(); showMenu(); });
-    card.append(main, options);
+    card.append(main, options, statusBar);
+    if (figure.folderAccessRequired || figure.storageProblem) {
+      card.append(el('span', 'card-storage-warning', figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : `Geräteordner: ${figure.storageProblem}`));
+    }
     if (figure.folderAccessRequired && folderSupported()) {
       card.classList.add('needs-folder-access');
       const allow = button('Ordnerzugriff erlauben', async () => {
