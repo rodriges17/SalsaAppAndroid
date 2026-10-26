@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-25-direct-import-v1';
+const APP_VERSION = '2026-10-26-library-order-v1';
 import { createOverviewLoader } from './overview-loader.js';
 import { retireAndroidShellCaches } from './android-shell-cleanup.js';
 import { initBackup } from './backup-ui.js';
