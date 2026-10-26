@@ -20,3 +20,9 @@ Die abbrechbare Prüfung und das Einlesen geteilter Dateien vor dem Öffnen des 
 
 **Geräteordner-Schreibvorgang**:
 Das vorbereitete Schreiben einer Datei in einen verbundenen Geräteordner. Bis zum Abschluss bleiben die Daten vorläufig. Mit dem Abschluss beginnt die Übernahme in die Zieldatei; danach wird sie nicht mehr durch einen Abbruch unterbrochen.
+
+**Lokale Cloud-Verfügbarkeit**:
+Die Verfügbarkeit einer Cloud-Version als einzelne vollständige, lesbare lokale Kopie. Teilkopien, fehlende Dateien, fehlender Ordnerzugriff und eine vorhandene ältere Version werden unterschieden. Mehrere Teilkopien ergeben zusammen keine vollständige Kopie.
+
+**Cloud-Herkunft**:
+Die Zuordnung einer lokalen Figur zu ihrer Cloud-Figur und der übernommenen oder hochgeladenen Version. Lokale Inhaltsänderungen bleiben erkennbar; Lernstand und Verfügbarkeit sind davon unabhängig.

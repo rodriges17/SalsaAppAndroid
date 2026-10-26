@@ -443,7 +443,7 @@ test('cloud figure marks locally stored selection and disables duplicate downloa
  await page.evaluate(async()=>{
   localStorage.setItem(`salsa-cloud-session:${new URL('./',location.href).pathname}:v1`,JSON.stringify({access_token:'account-a',refresh_token:'refresh-a',expires_at:Date.now()+3600000}));
   const s=await import('./storage.js'),blob=await(await fetch('/fixture.mp4')).blob();
-  await s.saveFigure({id:'local-copy',title:'Renamed local figure',status:'Sitzt',tags:[],importFingerprint:'cloud:local-revision:v2,v1'},[{id:'v',name:'Video',blob,duration:1,confirmed:true}]);
+  await s.saveFigure({id:'local-copy',title:'Renamed local figure',status:'Sitzt',tags:[],importFingerprint:'cloud:local-revision:v2,v1'},[{id:'v',name:'Video',blob,duration:1,confirmed:true},{id:'w',name:'Second video',blob,duration:1,confirmed:true}]);
  });
  await page.route('**/functions/v1/cloud',route=>{
   const {action}=route.request().postDataJSON();
