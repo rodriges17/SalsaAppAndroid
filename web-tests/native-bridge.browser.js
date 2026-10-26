@@ -451,10 +451,10 @@ test('cloud figure marks locally stored selection and disables duplicate downloa
   return route.fulfill({contentType:'application/json',body:JSON.stringify(action==='state'?state:action==='poster_get'?{poster:null}:{ok:true})});
  });
  await page.locator('#cloudButton').click();await page.getByRole('heading',{name:'Cloud Original',exact:true}).waitFor();
- const button=page.getByRole('button',{name:'✓ Lokal vorhanden',exact:true});await button.waitFor();
- assert.equal(await button.isDisabled(),true);assert.equal(await page.locator('.cloud-local-status').first().textContent(),'✓ Bereits lokal vorhanden');
- await page.getByLabel('One ·',{exact:false}).uncheck();assert.equal(await button.isDisabled(),true);
- await page.getByLabel('Two ·',{exact:false}).uncheck();assert.equal(await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).isDisabled(),false);
+ const button=page.getByRole('button',{name:'Lokale Figur öffnen',exact:true});await button.waitFor();
+ assert.equal(await button.isEnabled(),true);assert.equal(await page.locator('.cloud-local-status').first().textContent(),'☁ Lokal verfügbar');
+ await button.click();await page.locator('#editor').waitFor();
+ assert.equal(await page.locator('#figureTitle').inputValue(),'Renamed local figure');
  }finally{await context.close();}
 });
 
