@@ -28,7 +28,14 @@ jobs:
       - name: Verify shared PWA storage and exchange formats
         run: npm test
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Select installed Chrome for bridge tests
+        timeout-minutes: 5
+        run: |
+          if command -v google-chrome >/dev/null 2>&1; then
+            echo "CHROMIUM_EXECUTABLE=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          else
+            npx playwright install --with-deps chromium
+          fi
       - name: Verify Android bridge in Chromium
         run: npm run test:bridge
       - name: Restore and verify permanent distribution signing key
