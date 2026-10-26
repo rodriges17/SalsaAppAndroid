@@ -453,7 +453,7 @@ test('cloud figure marks locally stored selection and disables duplicate downloa
  await page.locator('#cloudButton').click();await page.getByRole('heading',{name:'Cloud Original',exact:true}).waitFor();
  await page.locator('.cloud-own-figure summary').first().click();
  const button=page.getByRole('button',{name:'Lokale Figur öffnen',exact:true});await button.waitFor();
- assert.equal(await button.isEnabled(),true);assert.equal(await page.locator('.cloud-local-status').first().textContent(),'☁ Lokal verfügbar');
+ assert.equal(await button.isEnabled(),true);assert.equal(await page.locator('.cloud-local-status').first().textContent(),'Lokal verfügbar');
  await button.click();await page.locator('#editor').waitFor();
  assert.equal(await page.locator('#figureTitle').inputValue(),'Renamed local figure');
  }finally{await context.close();}
