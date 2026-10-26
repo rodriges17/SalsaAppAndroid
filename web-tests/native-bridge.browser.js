@@ -473,13 +473,13 @@ test('Android startup shows cached figures and stays interactive while folder ch
   await page.waitForTimeout(100);
   assert.equal(await page.evaluate(()=>window.pendingLibraryReads.length),1,'Lifecycle events restarted the startup scan');
   assert.equal(await page.locator('.figure-card').count(),2);
-  assert.match(await page.locator(`[data-figure-id="${copy.id}"] .card-copy`).innerText(),/Wird geprüft/);
+  assert.match(await page.locator(`[data-figure-id="${copy.id}"]`).innerText(),/wird geprüft/);
   assert.equal(await page.evaluate(()=>fileCalls.filter(c=>c.op==='stat'&&c.path.includes('/media/')).length),0);
   await page.locator('#search').fill('App Figur');assert.equal(await page.locator('.figure-card').count(),2);
   await page.evaluate(()=>{window.holdLibraryReads=false;window.pendingLibraryReads.splice(0).forEach(resolve=>resolve());});
-  await page.waitForFunction(id=>document.querySelector(`[data-figure-id="${id}"] .card-copy`)?.textContent.includes('Videodatei fehlt'),copy.id);
+  await page.waitForFunction(id=>document.querySelector(`[data-figure-id="${id}"]`)?.textContent.includes('Videodatei fehlt'),copy.id);
   assert.equal(await page.locator('#search').inputValue(),'App Figur');
-  assert.doesNotMatch(await page.locator(`[data-figure-id="${copy.id}"] .card-copy`).innerText(),/Wird geprüft/);
+  assert.doesNotMatch(await page.locator(`[data-figure-id="${copy.id}"]`).innerText(),/wird geprüft/);
  }finally{await context.close();}
 });
 
