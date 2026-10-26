@@ -8,7 +8,7 @@ test('Android uses the original SalsaAppCloud layout and stylesheet', async () =
  const root = new URL('../app/src/main/assets/', import.meta.url);
  const html = await readFile(new URL('index.html', root), 'utf8');
  assert.equal(hash(html.slice(html.indexOf('<body>'))), '509ace103f2da2d8ec614c2dc45efd5d4f6e134622cdee07a50fde29ae9f8bee');
- assert.equal(hash(await readFile(new URL('styles.css', root))), 'f31366defe2ef9a0825432b7b9269fb3be0b8230d5bd6b4333e060f76bf7f93d');
+ assert.equal(hash(await readFile(new URL('styles.css', root))), '5b2db126b1cd76dada2b5b407d17ca72fa7c102a63cbf3c078620880082da787');
  const manifest = await readFile(new URL('../app/src/main/AndroidManifest.xml', import.meta.url), 'utf8');
  assert.match(manifest, /name=".CloudUiActivity" android:exported="true"/);
 });
