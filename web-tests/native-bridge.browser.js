@@ -587,3 +587,36 @@ test('folder editor keeps metadata usable during video checks and never autofocu
   assert.equal(await page.locator('#saveFigure').isEnabled(),true);
  }finally{await context.close();}
 });
+
+test('storage transfer dialog persists with quoted title and direction until video verification finishes',async()=>{
+ const {page,context}=await setup();try{
+  const draft=await rpc(page,'edit');const videos=await add(page,draft,'Video');
+  let figure=await rpc(page,'save',{token:draft.token,title:'Enchufla',description:'',status:'Neu',tags:[],videos});
+  await rpc(page,'folder',{action:'choose'});
+  for(const direction of ['App-Speicher → Geräteordner','Geräteordner → App-Speicher']){
+   await page.evaluate(()=>{const original=window.fetch;window.releaseTransfer=null;
+    window.fetch=async(...args)=>{
+     if(decodeURIComponent(String(args[0])).includes('/media/')){window.fetch=original;await new Promise(r=>window.releaseTransfer=r);}
+     return original(...args);
+    };
+   });
+   await page.evaluate(key=>{window.pendingTransfer=AndroidAppUI.show('transfer',key);}, {id:figure.id,storageFolder:figure.storageFolder??null});
+   await page.locator('#confirmOK').click();
+   await page.waitForFunction(()=>typeof window.releaseTransfer==='function');
+   assert.equal(await page.locator('#transferProgressDialog').isVisible(),true);
+   assert.equal(await page.locator('#transferProgressTitle').textContent(),'Figur wird übertragen');
+   assert.equal(await page.locator('#transferProgressName').textContent(),'„Enchufla“');
+   assert.equal(await page.locator('#transferProgressDirection').textContent(),direction);
+   await page.waitForTimeout(4700);
+   await page.evaluate(()=>AndroidAppUI.back());
+   assert.equal(await page.locator('#transferProgressDialog').isVisible(),true);
+   await page.evaluate(()=>window.releaseTransfer());
+   await page.waitForFunction(()=>document.querySelector('#confirmTitle').textContent==='Kopie erfolgreich geprüft');
+   assert.equal(await page.locator('#transferProgressDialog').isVisible(),false);
+   await page.locator('#confirmOK').click();await page.evaluate(()=>window.pendingTransfer);
+   assert.equal(await page.locator('#transferProgressDialog').isVisible(),false);
+   assert.equal(await page.locator('#toast').textContent(),'Übertragung abgeschlossen.');
+   const figures=await rpc(page,'list');assert.equal(figures.length,1);figure=figures[0];
+  }
+ }finally{await context.close();}
+});
