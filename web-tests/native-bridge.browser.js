@@ -620,3 +620,32 @@ test('storage transfer dialog persists with quoted title and direction until vid
   }
  }finally{await context.close();}
 });
+
+test('active Android cloud upload retains saved figure and retries attachment without media transfer',async()=>{
+ const {page,context}=await setup();try{
+  let fail=true,commits=0,transfers=0,saved=null;const calls=[];
+  await page.route('https://tzaprobvauikssnpiucl.supabase.co/**',async route=>{
+   const req=route.request(),url=new URL(req.url()),headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};
+   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});let result={ok:true};
+   if(url.pathname==='/auth/v1/verify')result={access_token:'test-token',refresh_token:'refresh',expires_in:3600};
+   else if(url.pathname==='/functions/v1/cloud'){
+    const {action,payload}=req.postDataJSON();calls.push(action);
+    if(action==='state')result={me:{id:'writer',email:'writer@example.test',is_admin:false,upload_enabled:true,used:0,quota:500000000},libraries:[{id:'library',title:'Privat',visibility:'private',contribute:true}],own_figures:saved?[saved]:[]};
+    if(action==='duplicates')result={matches:[]};
+    if(action==='reserve')result={job:'job',media:payload.videos.map((v,i)=>({id:'media-'+i,path:'media/'+i}))};
+    if(action==='commit'){commits++;saved={id:'cloud',owner_id:'writer',public_allowed:false,revisions:[{id:'revision',title:payload.title,description:payload.description,tags:payload.tags,videos:payload.videos}]};result={figure:'cloud',revision:'revision'};}
+    if(action==='attach'&&fail)return route.fulfill({status:400,headers,contentType:'application/json',body:JSON.stringify({error:'Test-Zuordnung fehlgeschlagen'})});
+   }else if(url.pathname.startsWith('/storage/'))transfers++;
+   return route.fulfill({status:200,headers,contentType:'application/json',body:JSON.stringify(result)});
+  });
+  await rpc(page,'login',{link:'https://rodriges17.github.io/SalsaAppCloud/?token_hash=test-token&type=magiclink'});
+  const figure=await create(page,'Aktiver Upload');
+  await page.evaluate(key=>AndroidAppUI.show('cloud',key),{id:figure.id});
+  await page.getByRole('combobox',{name:'Bibliothek',exact:true}).selectOption('library');
+  await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#cloudUploadRecovery')?.textContent.includes('Bibliothekszuordnung fehlgeschlagen'));
+  const sent=transfers;fail=false;await page.getByRole('button',{name:'Zuordnung erneut versuchen',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#cloudUploadRecovery').hidden);
+  assert.equal(commits,1);assert.equal(transfers,sent);assert.equal(calls.filter(a=>a==='reserve').length,1);
+ }finally{await context.close();}
+});
