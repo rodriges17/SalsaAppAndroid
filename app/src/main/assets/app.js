@@ -1,6 +1,6 @@
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-27-transfer-dialog-v1';
+const APP_VERSION = '2026-10-27-content-sync-v1';
 import { createOverviewLoader } from './overview-loader.js';
 import { retireAndroidShellCaches } from './android-shell-cleanup.js';
 import { initBackup } from './backup-ui.js';
@@ -745,7 +745,7 @@ async function chooseCloudImport({ title, fingerprint, revisionIds, figureId }) 
     document.body.append(dialog); dialog.showModal(); actions.firstChild.focus();
   });
 }
-initCloud({ openLocal: figure => { openEditor(figure); }, confirm: confirmAction, closed: () => { if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, localSaved: () => toast('Figur lokal gespeichert.') });
+initCloud({ openLocal: figure => { openEditor(figure); }, confirm: confirmAction, closed: () => { void refresh(); if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, localSaved: () => toast('Figur lokal gespeichert.') });
 await refresh({ cached: true });
 // Old interrupted imports are housekeeping, not a prerequisite for the overview.
 requestAnimationFrame(() => setTimeout(() => {
