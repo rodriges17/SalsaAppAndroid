@@ -559,3 +559,31 @@ test('Android cloud matching reuses folder hashes without transferring videos an
   assert.deepEqual(await scan(),{transfers:0,matches:0});
  } finally {await context.close();}
 });
+
+test('folder editor keeps metadata usable during video checks and never autofocuses the title',async()=>{
+ const {page,context}=await setup();try{
+  const draft=await rpc(page,'edit');const videos=await add(page,draft,'Video');
+  const f=await rpc(page,'save',{token:draft.token,title:'Ohne Tastatur',description:'Vorher',status:'Neu',tags:[],videos});
+  const folder=(await rpc(page,'folder',{action:'choose'})).activeFolder;
+  const copy=await rpc(page,'transfer',{id:f.id,target:folder});
+  await page.evaluate(()=>AndroidAppUI.show('overview'));
+  await page.evaluate(()=>{const original=window.fetch;window.editorReads=[];window.fetch=async(...args)=>{
+   if(String(args[0]).includes('/mock/')&&decodeURIComponent(String(args[0])).includes('/media/'))await new Promise(resolve=>window.editorReads.push(resolve));
+   return original(...args);
+  };});
+  await page.locator(`[data-figure-id="${copy.id}"] .card-options`).click();
+  await page.getByRole('button',{name:'Bearbeiten',exact:true}).click();
+  await page.waitForFunction(()=>window.editorReads.length===1);
+  assert.equal(await page.locator('#figureTitle').isEnabled(),true);
+  assert.equal(await page.locator('#pickVideos').isDisabled(),true);
+  assert.equal(await page.locator('#saveFigure').isDisabled(),true);
+  assert.equal(await page.evaluate(()=>document.activeElement.matches('input,textarea,select')),false);
+  await page.locator('#figureDescription').fill('Während der Prüfung geändert');
+  await page.evaluate(()=>window.editorReads[0]());
+  await page.waitForFunction(()=>document.querySelector('#editorLoading').hidden);
+  assert.equal(await page.locator('#figureDescription').inputValue(),'Während der Prüfung geändert');
+  assert.equal(await page.locator('#figureDescription').evaluate(e=>e===document.activeElement),true);
+  assert.equal(await page.locator('#figureTitle').evaluate(e=>e===document.activeElement),false);
+  assert.equal(await page.locator('#saveFigure').isEnabled(),true);
+ }finally{await context.close();}
+});
