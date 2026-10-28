@@ -21,6 +21,8 @@ async function setup(contextOptions={}){const context=await browser.newContext(c
  const fs=JSON.parse(localStorage.getItem('mock-native-fs')||'{"files":{},"dirs":[""]}');
  const save=()=>localStorage.setItem('mock-native-fs',JSON.stringify(fs));
  const decode=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));const encode=b=>{let s='';for(const c of b)s+=String.fromCharCode(c);return btoa(s);};
+ // Mutate the live fixture too: pending file calls must not overwrite an external timestamp change.
+ window.touchMockMedia=()=>{for(const [path,file] of Object.entries(fs.files))if(path.includes('/media/'))file.time+=10000;save();};
  const writers=new Map();
  window.fileCalls=[];window.pendingLibraryReads=[];window.holdLibraryReads=localStorage.getItem('hold-startup-library')==='yes';
  window.AndroidFiles={pick(){setTimeout(()=>window.AndroidFSResult({root:'grant',path:'',name:'Android documents',kind:'directory'}));},call(raw){const a=JSON.parse(raw);window.fileCalls.push({op:a.op,path:a.path});let value;try{switch(a.op){case'permission':value=localStorage.getItem('deny-folder-access')==='yes'?'denied':'granted';break;case'child':{const path=[a.path,a.name].filter(Boolean).join('/');if(a.directory){if(!fs.dirs.includes(path)){if(!a.create)throw Error('NotFoundError');fs.dirs.push(path);}}else if(!(path in fs.files)){if(!a.create)throw Error('NotFoundError');fs.files[path]={data:'',time:1};}save();value={root:a.root,path,name:a.name,kind:a.directory?'directory':'file'};break;}case'list':value=[...fs.dirs,...Object.keys(fs.files)].filter(p=>p!==a.path&&p.startsWith(a.path?a.path+'/':'')&&!p.slice(a.path?a.path.length+1:0).includes('/')).map(p=>p.split('/').at(-1));break;case'stat':{const f=fs.files[a.path];if(!f)throw Error('NotFoundError');value={size:decode(f.data).length,lastModified:f.time,name:a.path.split('/').at(-1),url:'https://appassets.androidplatform.net/mock/'+encodeURIComponent(a.path)};break;}case'begin':value=crypto.randomUUID();writers.set(value,{path:a.path,parts:[]});break;case'write':writers.get(a.token).parts.push(decode(a.data));value=true;break;case'close':{const w=writers.get(a.token);const size=w.parts.reduce((s,p)=>s+p.length,0);const out=new Uint8Array(size);let p=0;w.parts.forEach(b=>{out.set(b,p);p+=b.length;});fs.files[w.path]={data:encode(out),time:Date.now()};save();writers.delete(a.token);value=true;break;}case'abort':writers.delete(a.token);value=true;break;case'remove':{const path=[a.path,a.name].filter(Boolean).join('/');if(!fs.files[path])throw Error('NotFoundError');delete fs.files[path];save();value=true;break;}default:throw Error('Unknown operation');}return JSON.stringify({value});}catch(e){return JSON.stringify({error:e.message,name:e.message==='NotFoundError'?'NotFoundError':'InvalidStateError'});}}};
@@ -555,7 +557,7 @@ test('Android cloud matching reuses folder hashes without transferring videos an
   assert.deepEqual(await scan(),{transfers:0,matches:1});
   await page.reload();await page.waitForFunction(()=>window.nativeReady);
   assert.deepEqual(await scan(),{transfers:0,matches:1});
-  await page.evaluate(()=>{const fs=JSON.parse(localStorage.getItem('mock-native-fs'));for(const [path,f] of Object.entries(fs.files))if(path.includes('/media/'))f.time+=10000;localStorage.setItem('mock-native-fs',JSON.stringify(fs));});
+  await page.evaluate(()=>window.touchMockMedia());
   await page.reload();await page.waitForFunction(()=>window.nativeReady);
   assert.deepEqual(await scan(),{transfers:0,matches:0});
  } finally {await context.close();}
