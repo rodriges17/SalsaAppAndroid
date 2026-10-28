@@ -1,4 +1,6 @@
-# Step by Step – Android 0.7.22
+# Step by Step – Android 0.7.63
+
+[Lokale Figurenbearbeitung](docs/LOKALE-FIGURENBEARBEITUNG.md)
 
 [Cloud-Speicher und Figurenreferenzen](docs/CLOUD-SPEICHER.md)
 

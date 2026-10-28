@@ -35,3 +35,6 @@ Der im Arbeitsspeicher gehaltene Entwurf einer bestehenden Bibliothek mit Angabe
 
 **Tag-Auswahl**:
 Das durchsuchbare Mehrfachauswahlfeld mit vorhandenen Vorschlägen und einzeln entfernbaren Zuordnungen. Die Suche ignoriert Groß-/Kleinschreibung, die Tag-Identität nicht.
+
+**Lokale Figuren-Bearbeitungssitzung**:
+Der vorübergehende Entwurf einer neuen, bestehenden oder importierten lokalen Figur mit Angaben und geordneten Videos. Er umfasst Videoprüfung und Bestätigung, Speichern und Verwerfen. Ungespeicherte Änderungen bestehen nur während der geöffneten Bearbeitung. Eine gespeicherte Figur bleibt unabhängig von der anschließenden Aktualisierung der Übersicht erhalten.
