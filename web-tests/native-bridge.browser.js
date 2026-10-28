@@ -264,7 +264,7 @@ test('Android shows the saving message and activity indicator while video storag
 });
 
 // Shared contract is byte-for-byte identical to the PWA's contract.
-const {PARITY_CASES,runParityCase}=await import('./parity-cases.js');
+import {PARITY_CASES,runParityCase} from './parity-cases.js';
 for(const scenario of PARITY_CASES)test('shared feature contract: '+scenario,async()=>{
  const {page,context}=await setup(scenario==='navigation-return-hover'?{hasTouch:true,isMobile:true}:{});try{
   const errors=[];page.on('console',m=>{if(m.type()==='error'&&m.text().includes('Content Security Policy'))errors.push(m.text());});
@@ -529,8 +529,9 @@ test('Android cloud shows platform role and expands person details inline',async
  await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
  });
  await page.evaluate(()=>localStorage.setItem('salsa-cloud-session:/:v1',JSON.stringify({access_token:'test-jwt',refresh_token:'test-refresh',expires_at:Date.now()+3600000})));
- await page.reload();await page.waitForFunction(()=>window.nativeReady);await page.locator('#cloudButton').click();await page.getByText('Plattform-Administrator',{exact:true}).waitFor();
- await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).click();const writer=page.locator('.cloud-person-summary').filter({hasText:'writer@example.test'}),reader=page.locator('.cloud-person-summary').filter({hasText:'reader@example.test'});
+ await page.reload();await page.waitForFunction(()=>window.nativeReady);await page.locator('#cloudButton').click();await page.locator('#cloudAccountOpen').waitFor();
+ await page.locator('#cloudAccountOpen').click();assert.equal(await page.getByText('Plattform-Administrator',{exact:true}).isVisible(),true);await page.evaluate(()=>window.AndroidAppUI.back());assert.equal(await page.locator('#cloudAccountMenu').isVisible(),false);assert.equal(await page.locator('#cloudDialog').isVisible(),true);
+ await page.locator('#cloudAccountOpen').click();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).click();const writer=page.locator('.cloud-person-summary').filter({hasText:'writer@example.test'}),reader=page.locator('.cloud-person-summary').filter({hasText:'reader@example.test'});
  await writer.click();assert.equal(await writer.getAttribute('aria-expanded'),'true');await reader.click();assert.equal(await writer.getAttribute('aria-expanded'),'false');assert.equal(await page.locator('.cloud-person-details').count(),1);
  await writer.click();await page.getByLabel('Figuren hochladen und Bibliotheken erstellen',{exact:true}).uncheck();await page.getByRole('button',{name:'Änderungen speichern',exact:true}).click();await page.locator('#confirmCancel').click();assert.equal(calls.some(c=>c.action==='admin_user'),false);
  await page.getByRole('button',{name:'Neuen Anmeldelink erstellen',exact:true}).click();await page.getByLabel('Einmaliger persönlicher Anmeldelink',{exact:true}).waitFor();assert.match(await page.locator('.cloud-login-link').innerText(),/genaue Ablaufzeit ist derzeit nicht bestätigt/);
