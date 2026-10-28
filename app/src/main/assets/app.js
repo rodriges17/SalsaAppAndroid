@@ -3,14 +3,14 @@ import { mountTagPicker } from './tag-picker.js';
 import { createFigureEditSession } from './figure-edit-session.js';
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-28-compact-tags-v1';
+const APP_VERSION = '2026-10-28-pur-cloud-v1';
 import { createOverviewLoader } from './overview-loader.js';
 import { retireAndroidShellCaches } from './android-shell-cleanup.js';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
 import { signedIn } from './cloud-api.js';
-import { initCloud, openCloud } from './cloud.js';
+import { initCloud, openCloud, closeCloud } from './cloud.js';
 import { importFigure } from './package.js';
 import { checksum } from './package.js';
 import { STATUSES, timeLabel, filterFigures, ABLoop } from './logic.js';
@@ -763,7 +763,7 @@ $('applyUpdate').onclick = () => {
 document.querySelectorAll('[data-nav]').forEach(nav => {
   if (nav.id === 'cloudButton' || nav.closest('#cloudDialog')) return;
   nav.onclick = async () => {
-    if (nav.closest('#infoDialog')) { if (deviceBusy) return; $('infoDialog').close(); }
+    if (nav.closest('#infoDialog')) { if (deviceBusy) return; if (nav.dataset.nav === 'figures' && $('cloudDialog').open) { await closeCloud(); if ($('cloudDialog').open) return; } $('infoDialog').close(); }
     if (learning) { await new Promise(resolve => { window.addEventListener('popstate', resolve, { once: true }); history.back(); }); }
     if (nav.dataset.nav === 'cloud') openCloud();
     else { window.scrollTo({ top: 0 }); focusFiguresNavigation(); }
@@ -787,7 +787,7 @@ async function chooseCloudImport({ title, fingerprint, revisionIds, figureId }) 
     document.body.append(dialog); dialog.showModal(); actions.firstChild.focus();
   });
 }
-initCloud({ openLocal: figure => { openEditor(figure); }, confirm: confirmAction, closed: () => { void refresh(); if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, localSaved: () => toast('Figur lokal gespeichert.') });
+initCloud({ settings: () => $('infoButton').click(), openLocal: figure => { openEditor(figure); }, confirm: confirmAction, closed: () => { void refresh(); if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, localSaved: () => toast('Figur lokal gespeichert.') });
 await refresh({ cached: true });
 // Old interrupted imports are housekeeping, not a prerequisite for the overview.
 requestAnimationFrame(() => setTimeout(() => {
