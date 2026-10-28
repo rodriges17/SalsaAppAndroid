@@ -44,3 +44,11 @@ test('returning to an idle overview renders summaries before revalidating folder
  const calls=[];const h=setup(options=>{calls.push(options);return[{id:'app'}];});
  await h.refresh();await h.resume();assert.equal(calls.length,2);assert.equal(calls[1].cached,true);
 });
+
+test('explicit post-save refresh reports a failed or superseded overview to its caller',async()=>{
+ const error=Error('offline'),f=setup(()=>Promise.reject(error));
+ await assert.rejects(f.refresh({strict:true}),error);assert.deepEqual(f.errors,[error]);
+ const delayed=pending();let calls=0;const h=setup(()=>++calls===1?delayed.promise:[{id:'fresh'}]);
+ const stale=h.refresh({strict:true});await h.refresh();delayed.resolve([{id:'stale'}]);
+ await assert.rejects(stale,{name:'AbortError'});assert.equal(h.rendered.at(-1)[0].id,'fresh');
+});

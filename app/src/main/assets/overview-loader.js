@@ -2,7 +2,7 @@
 // refresh supersedes its predecessor. Lifecycle events reuse a pending check.
 export function createOverviewLoader({ list, render, failed, defer }) {
   let current;
-  async function refresh({ cached = false } = {}) {
+  async function refresh({ cached = false, strict = false } = {}) {
     current?.controller.abort();
     const active = { controller: new AbortController(), pending: true }; current = active;
     const signal = active.controller.signal;
@@ -11,6 +11,7 @@ export function createOverviewLoader({ list, render, failed, defer }) {
     let deferred = false;
     try {
       const figures = await list({ cached, signal });
+      if (strict) signal.throwIfAborted();
       apply(figures);
       if (cached && figures.some(f => f.storageChecking) && !signal.aborted) {
         deferred = true;
@@ -22,7 +23,7 @@ export function createOverviewLoader({ list, render, failed, defer }) {
           finally { active.pending = false; }
         });
       }
-    } catch (error) { report(error); }
+    } catch (error) { report(error); if (strict) throw error; }
     finally { if (!deferred) active.pending = false; }
   }
   // Focus and visibility can arrive together, including during cold startup.

@@ -652,3 +652,113 @@ test('active Android cloud upload retains saved figure and retries attachment wi
   assert.equal(commits,1);assert.equal(transfers,sent);assert.equal(calls.filter(a=>a==='reserve').length,1);
  }finally{await context.close();}
 });
+
+test('active editor retains committed figure when overview loading fails and retry never saves twice',async()=>{
+ const {page,context}=await setup();try{
+  const f=await create(page,'Sicher gespeichert');await page.evaluate(()=>AndroidAppUI.show('overview'));
+  await page.locator(`[data-figure-id="${f.id}"] .card-options`).click();await page.getByRole('button',{name:'Bearbeiten',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#editorLoading').hidden);
+  await page.locator('#figureDescription').fill('Bleibt gespeichert');
+  await page.evaluate(()=>{
+   window.failEditorOverview=true;window.editorFigureWrites=0;
+   const getAll=IDBObjectStore.prototype.getAll,put=IDBObjectStore.prototype.put;
+   IDBObjectStore.prototype.getAll=function(...args){if(this.name==='figures'&&window.failEditorOverview)throw Error('Test: Übersicht offline');return getAll.apply(this,args);};
+   IDBObjectStore.prototype.put=function(...args){if(this.name==='figures')window.editorFigureWrites++;return put.apply(this,args);};
+  });
+  await page.locator('#saveFigure').click();await page.locator('#retryEditorRefresh').waitFor();
+  assert.match(await page.locator('#editorError').textContent(),/Figur ist gespeichert/);
+  assert.equal(await page.locator('#saveFigure').isVisible(),false);
+  assert.equal(await page.locator('#figureTitle').isDisabled(),true);
+  await page.locator('#retryEditorRefresh').click();await page.waitForFunction(()=>!document.querySelector('#retryEditorRefresh').disabled);
+  assert.equal(await page.evaluate(()=>window.editorFigureWrites),1);
+  await page.evaluate(()=>window.failEditorOverview=false);
+  await page.locator('#retryEditorRefresh').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  const all=await rpc(page,'list');assert.equal(all.length,1);assert.equal(all[0].description,'Bleibt gespeichert');
+  assert.equal(await page.evaluate(()=>window.editorFigureWrites),1);
+ }finally{await context.close();}
+});
+
+test('active editor conflict keeps draft until confirmed reload and then uses the new revision',async()=>{
+ const {page,context}=await setup();try{
+  const f=await create(page,'Ursprünglich');await page.evaluate(()=>AndroidAppUI.show('overview'));
+  await page.locator(`[data-figure-id="${f.id}"] .card-options`).click();await page.getByRole('button',{name:'Bearbeiten',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#editorLoading').hidden);
+  await page.locator('#figureTitle').fill('Mein Entwurf');
+  const elsewhere=await rpc(page,'edit',{id:f.id});
+  await rpc(page,'save',{token:elsewhere.token,title:'Anderer Stand',description:'Extern',status:'Sitzt',tags:['Extern'],videos:elsewhere.videos});
+  await page.locator('#saveFigure').click();await page.locator('#reloadEditor').waitFor();
+  assert.equal(await page.locator('#figureTitle').inputValue(),'Mein Entwurf');assert.equal(await page.locator('#saveFigure').isDisabled(),true);
+  await page.locator('#reloadEditor').click();await page.getByRole('button',{name:'Weiter bearbeiten',exact:true}).click();
+  assert.equal(await page.locator('#figureTitle').inputValue(),'Mein Entwurf');
+  await page.locator('#reloadEditor').click();await page.getByRole('button',{name:'Verwerfen und neu laden',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#figureTitle').value==='Anderer Stand');
+  assert.equal(await page.locator('#figureDescription').inputValue(),'Extern');
+  await page.locator('#figureDescription').fill('Nachgeladen und bearbeitet');await page.locator('#saveFigure').click();
+  await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  assert.equal((await rpc(page,'list'))[0].description,'Nachgeladen und bearbeitet');
+ }finally{await context.close();}
+});
+
+test('closing a checking editor prevents its delayed media from replacing a reopened draft',async()=>{
+ const {page,context}=await setup();try{
+  const f=await create(page,'Alte Prüfung');const folder=(await rpc(page,'folder',{action:'choose'})).activeFolder;
+  const copy=await rpc(page,'transfer',{id:f.id,target:folder});await page.evaluate(()=>AndroidAppUI.show('overview'));
+  await page.evaluate(()=>{const original=window.fetch;window.oldEditorReads=[];window.oldReadReturned=false;window.fetch=async(...args)=>{
+   if(String(args[0]).includes('/mock/')&&decodeURIComponent(String(args[0])).includes('/media/')){
+    await new Promise(resolve=>window.oldEditorReads.push(resolve));const response=await original(...args);window.oldReadReturned=true;return response;
+   }return original(...args);
+  };});
+  await page.locator(`[data-figure-id="${copy.id}"] .card-options`).click();await page.getByRole('button',{name:'Bearbeiten',exact:true}).click();
+  await page.waitForFunction(()=>window.oldEditorReads.length===1);await page.locator('#editorBack').click();
+  await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  await page.locator(`[data-figure-id="${f.id}"] .card-options`).click();await page.getByRole('button',{name:'Bearbeiten',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#editorLoading').hidden);
+  await page.locator('#figureTitle').fill('Neuer Entwurf');await page.evaluate(()=>window.oldEditorReads[0]());
+  await page.waitForFunction(()=>window.oldReadReturned);
+  assert.equal(await page.locator('#figureTitle').inputValue(),'Neuer Entwurf');
+  assert.equal(await page.locator('#editorError').isVisible(),false);assert.equal(await page.locator('#saveFigure').isEnabled(),true);
+ }finally{await context.close();}
+});
+
+test('file picker and sequential review save the reordered renamed local videos',async()=>{
+ const {page,context}=await setup();try{
+  await page.locator('#openAddFigure').click();await page.locator('#addFigure').click();
+  const choosing=page.waitForEvent('filechooser');await page.locator('#pickVideos').click();
+  const chooser=await choosing,bytes=await readFile(new URL('./fixtures/video.mp4',import.meta.url));
+  await chooser.setFiles([{name:'Erstes.mp4',mimeType:'video/mp4',buffer:bytes},{name:'Zweites.mp4',mimeType:'video/mp4',buffer:bytes}]);
+  assert.equal(await page.locator('#draftVideos .draft-card').count(),2);assert.equal(await page.locator('#saveFigure').isDisabled(),true);
+  await page.locator('#reviewAll').click();
+  for(const title of ['Erstes','Zweites']){
+   await page.waitForFunction(name=>document.querySelector('#previewTitle').textContent===name,title);
+   await page.waitForFunction(()=>!document.querySelector('#acceptVideo').disabled);await page.locator('#acceptVideo').click();
+  }
+  await page.waitForFunction(()=>!document.querySelector('#preview').open);
+  await page.getByRole('button',{name:'Video 2 nach oben',exact:true}).click();
+  await page.getByRole('textbox',{name:'Name von Video 1',exact:true}).fill('Vorne umbenannt');
+  await page.locator('#draftVideos .draft-card').first().getByRole('button',{name:'Vorschau',exact:true}).click();
+  assert.equal(await page.locator('#previewTitle').textContent(),'Vorne umbenannt');await page.locator('#previewBack').click();
+  await page.waitForFunction(()=>!document.querySelector('#preview').open);
+  await page.locator('#draftVideos .draft-card').last().getByRole('button',{name:'Entfernen',exact:true}).click();
+  await page.locator('#saveFigure').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  const all=await rpc(page,'list');assert.equal(all.length,1);assert.equal(all[0].videoIds.length,1);
+  const editing=await rpc(page,'edit',{id:all[0].id});assert.equal(editing.videos[0].name,'Vorne umbenannt');
+ }finally{await context.close();}
+});
+
+test('reopening from an old overview shows the current stored figure instead of stale summary metadata',async()=>{
+ const {page,context}=await setup();try{
+  const f=await create(page,'Alter Überblick');await page.evaluate(()=>AndroidAppUI.show('overview'));
+  const fresh=await rpc(page,'edit',{id:f.id});
+  await rpc(page,'save',{token:fresh.token,title:'Bereits gespeichert',description:'Aktueller Inhalt',status:'Sitzt',tags:['Aktuell'],videos:fresh.videos});
+  await page.locator(`[data-figure-id="${f.id}"] .card-options`).click();await page.getByRole('button',{name:'Bearbeiten',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#editorLoading').hidden);
+  assert.equal(await page.locator('#figureTitle').inputValue(),'Bereits gespeichert');
+  assert.equal(await page.locator('#figureDescription').inputValue(),'Aktueller Inhalt');
+  await page.locator('#figureTags').fill('Nur Suchtext');
+  await page.locator('#editorBack').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  assert.equal(await page.locator('#confirmDialog').isVisible(),false);
+  await page.locator(`[data-figure-id="${f.id}"] .card-options`).click();await page.getByRole('button',{name:'Bearbeiten',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#editorLoading').hidden);
+  assert.equal(await page.locator('#figureTags').inputValue(),'');
+ }finally{await context.close();}
+});
