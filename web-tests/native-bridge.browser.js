@@ -277,8 +277,12 @@ import {PARITY_CASES,runParityCase} from './parity-cases.js';
 for(const scenario of PARITY_CASES)test('shared feature contract: '+scenario,async()=>{
  const {page,context}=await setup(scenario==='navigation-return-hover'?{hasTouch:true,isMobile:true}:{});try{
   const errors=[];page.on('console',m=>{if(m.type()==='error'&&m.text().includes('Content Security Policy'))errors.push(m.text());});
+  page.on('pageerror',error=>console.error('Cloud browser error:',error.message));
   await page.reload();await page.waitForFunction(()=>window.nativeReady);await page.evaluate(()=>document.fonts.ready);
   await runParityCase(page,{root:'/',fixture:'/fixture.mp4',native:true,scenario,consoleErrors:errors});
+ }catch(error){
+  console.error('Cloud failure context:',await page.evaluate(()=>({cloudOpen:document.querySelector('#cloudDialog')?.open,error:document.querySelector('#cloudError')?.textContent,dialogs:[...document.querySelectorAll('dialog[open]')].map(d=>d.id),focused:document.activeElement?.outerHTML,body:document.querySelector('#cloudBody')?.textContent})));
+  throw error;
  }finally{await context.close();}
 });
 
