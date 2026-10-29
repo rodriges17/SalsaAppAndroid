@@ -488,6 +488,53 @@ test('Android startup shows cached figures and stays interactive while folder ch
  }finally{await context.close();}
 });
 
+test('Android Cloud navigation remains usable and shares a pending device-folder scan',async()=>{
+ const {page,context}=await setup();try{
+  const app=await create(page);const folder=(await rpc(page,'folder',{action:'choose'})).activeFolder;
+  const copy=await rpc(page,'transfer',{id:app.id,target:folder});
+  await page.evaluate(async()=>{
+   const storage=await import('./storage.js');
+   await storage.saveFigure({id:crypto.randomUUID(),title:'Viele lokale Videos',description:'',tags:[],status:'Neu'},
+    Array.from({length:12},(_,i)=>({id:crypto.randomUUID(),name:`Video ${i}`,blob:new Blob(['video bytes'],{type:'video/mp4'}),confirmed:true,duration:1})));
+  });
+  await page.route('**/cloud-config.js',r=>r.fulfill({contentType:'text/javascript',body:`export const CLOUD_URL='${origin}';export const CLOUD_KEY='test';export const CLOUD_FILE_LIMIT=50000000;`}));
+  await page.route(origin+'/functions/v1/cloud',async route=>{
+   const {action}=route.request().postDataJSON();
+   const library={id:'course',title:'Schneller Kurs',visibility:'public'};
+   const value=action==='state'?{me:{id:'owner',upload_enabled:true},own_figures:[],libraries:[library]}:action==='library'?{library,entries:[],members:[],manage:false}:{ok:true};
+   await route.fulfill({contentType:'application/json',body:JSON.stringify(value)});
+  });
+  await page.evaluate(()=>localStorage.setItem('salsa-cloud-session:/:v1',JSON.stringify({access_token:'test',refresh_token:'refresh',expires_at:Date.now()+3600000})));
+  await page.reload();await page.waitForFunction(()=>window.nativeReady);
+  await page.waitForFunction(id=>{const card=document.querySelector(`[data-figure-id="${id}"]`);return card&&!card.textContent.includes('wird geprüft');},copy.id);
+  await page.evaluate(()=>{window.holdLibraryReads=true;});
+  await page.locator('#cloudButton').click();await page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();
+  await page.locator('a.cloud-library-card').click();await page.getByRole('heading',{name:'Schneller Kurs',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).click();
+  await page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.pendingLibraryReads.length),1,'Tab and library navigation must share one pending native folder read');
+  await page.evaluate(()=>{
+   const call=AndroidFiles.call.bind(AndroidFiles);
+   const total=Object.keys(JSON.parse(localStorage.getItem('mock-native-fs')).files).filter(path=>path.includes('/media/')).length;
+   let probes=0;
+   AndroidFiles.call=raw=>{
+    const request=JSON.parse(raw);
+    if(request.op==='stat'&&request.path.includes('/media/')){
+     probes++;
+     if(probes===1)setTimeout(()=>[...document.querySelectorAll('#cloudNavigation button')].find(b=>b.textContent==='Bibliotheken').click(),0);
+     if(probes===total)window.navigationDuringScan=[...document.querySelectorAll('#cloudBody h3')].some(h=>h.textContent==='Bibliotheken');
+    }
+    return call(raw);
+   };
+   window.holdLibraryReads=false;window.pendingLibraryReads.splice(0).forEach(resolve=>resolve());
+  });
+  await page.waitForFunction(()=>window.navigationDuringScan!==undefined);
+  assert.equal(await page.evaluate(()=>window.navigationDuringScan),true,'Queued navigation must run before the synchronous native media scan finishes');
+  assert.equal(await page.getByRole('heading',{name:'Bibliotheken',exact:true}).isVisible(),true);
+ }finally{await context.close();}
+});
+
 test('cached Android folder summaries do not probe files or claim access after permission is revoked',async()=>{
  const {page,context}=await setup();try{
   const app=await create(page);const folder=(await rpc(page,'folder',{action:'choose'})).activeFolder;
