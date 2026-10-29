@@ -14,6 +14,7 @@ import { figureVideos, figureMedia, listFigures, saveFigure, storageSettings } f
 import { downloadLibrary, downloadFigure, inspectCloudVideo, enrichCloudMetadata } from './cloud-library-download.js';
 import { readCloudCache, writeCloudCache, cloudCacheRevision } from './cloud-cache.js';
 import { cloudLocalIndex as localIndex } from './cloud-local.js';
+import { createCloudLocalInventory } from './cloud-local-inventory.js';
 import { createPosterView, posterPayload } from './cloud-posters.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
@@ -112,7 +113,7 @@ async function recoverAccess() {
 }
 const hasOwnArea = value => !!value?.me && (value.me.upload_enabled || value.own_figures?.length > 0);
 const initialArea = value => hasOwnArea(value) ? 'figures' : 'libraries';
-async function close() { if (busy || !await leaveLibraryDraft()) return; clearLibrarySession(); disposeUploadTags(); viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
+async function close() { if (busy || !await leaveLibraryDraft()) return; localInventory.clear(); localInventoryEpoch++; clearLibrarySession(); disposeUploadTags(); viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
 async function cloudBack() {
   if (accountDialog?.open) { dismissAccount(); return; }
   if (busy) return;
@@ -158,9 +159,10 @@ function focusSection(box) {
 }
 let viewEpoch = 0, statusTimer, displayedOwner = null, renderedView = null, authReloadPending = false;
 let localUpdates = [], localInventoryEpoch = 0;
+const localInventory = createCloudLocalInventory({ read: options => hooks.localFigures(options) });
 async function refreshLocalFigures() {
   const epoch = ++localInventoryEpoch;
-  const figures = await hooks.localFigures();
+  const figures = await localInventory.load();
   if (epoch === localInventoryEpoch) { localFigures = figures; localUpdates.forEach(update => update()); }
   return figures;
 }
@@ -207,6 +209,7 @@ async function load(library = current, allowCache = false) {
     if (epoch !== viewEpoch || !dialog.open) return;
     current = library;
     const active = () => epoch === viewEpoch && dialog.open && owner === cloudIdentity();
+    if (allowCache === 'refresh') localInventory.clear();
     void refreshLocalFigures().catch(() => {});
     const reusable = !!allowCache && !source && ['initial', 'figures', 'libraries'].includes(area);
     if (reusable) {
@@ -989,7 +992,7 @@ function adminForm() {
 }
 export function initCloud(callbacks) {
   hooks = callbacks;
-  const refreshLocal = () => { if (dialog.open) void refreshLocalFigures().catch(() => {}); };
+  const refreshLocal = () => { localInventory.clear(); if (dialog.open) void refreshLocalFigures().catch(() => {}); };
   addEventListener('local-figures-changed', refreshLocal);
   addEventListener('focus', refreshLocal);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshLocal(); });
@@ -1005,7 +1008,7 @@ export function initCloud(callbacks) {
   uploadRecovery = node('section', undefined, 'cloud-card'); uploadRecovery.id = 'cloudUploadRecovery'; uploadRecovery.setAttribute('role', 'status'); uploadRecovery.hidden = true; body.before(uploadRecovery);
   addEventListener('cloud-session-changed', event => {
     uploadWorkflow?.cancel(); uploadRecovery.hidden = true; uploadRecovery.replaceChildren();
-    clearLibrarySession(); document.querySelectorAll('.cloud-unsaved-dialog').forEach(prompt => prompt.dispatchEvent(new Event('cancel', { cancelable: true }))); document.querySelectorAll('.cloud-library-picker').forEach(picker => { picker.close(); picker.remove(); }); peopleView.reset(); viewEpoch++; renderedView = null; state = null; displayedOwner = null; localInventoryEpoch++; localFigures = []; localUpdates = [];
+    clearLibrarySession(); document.querySelectorAll('.cloud-unsaved-dialog').forEach(prompt => prompt.dispatchEvent(new Event('cancel', { cancelable: true }))); document.querySelectorAll('.cloud-library-picker').forEach(picker => { picker.close(); picker.remove(); }); peopleView.reset(); viewEpoch++; renderedView = null; state = null; displayedOwner = null; localInventory.clear(); localInventoryEpoch++; localFigures = []; localUpdates = [];
     disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; errorBox.hidden = true; cacheStatus('');
     if (loginTrigger) loginTrigger.hidden = signedIn();
     dismissAccount(); accountTrigger.hidden = true; accountDialog.replaceChildren();
