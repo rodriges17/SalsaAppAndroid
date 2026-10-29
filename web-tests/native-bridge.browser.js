@@ -31,6 +31,13 @@ async function setup(contextOptions={}){const context=await browser.newContext(c
  const fetchOriginal=window.fetch.bind(window);window.fetch=async(input,options)=>{const u=String(input);if(u.startsWith('https://appassets.androidplatform.net/mock/')){if(decodeURIComponent(u).endsWith('/library.json')&&window.holdLibraryReads)await new Promise(resolve=>window.pendingLibraryReads.push(resolve));const f=fs.files[decodeURIComponent(u.split('/mock/')[1])];return new Response(f?decode(f.data):null,{status:f?200:404,headers:{'Content-Type':'application/octet-stream'}});}return fetchOriginal(input,options);};
  });await page.goto(origin+'/index.html');await page.waitForFunction(()=>window.nativeReady);return{context,page};}
 async function rpc(page,op,args={}){const reply=await page.evaluate(({op,args})=>new Promise(resolve=>{const id=Math.floor(Math.random()*1e9);window.replies.set(id,resolve);NativeModel.request(id,op,args);}),{op,args});if(reply.error)throw Error(reply.error);return reply.value;}
+async function loginAndConfirm(page,link){
+ const pending=rpc(page,'login',{link});pending.catch(()=>{});
+ const prompt=page.locator('#cloudLoginConfirmation');await prompt.waitFor();
+ assert.match(await prompt.innerText(),/writer@example.test/);
+ assert.equal(await page.evaluate(()=>localStorage.getItem('salsa-cloud-session:/:v1')),null);
+ await prompt.getByRole('button',{name:'Anmelden',exact:true}).click();await pending;
+}
 async function add(page,session,name='Turn'){return rpc(page,'add',{token:session.token,url:origin+'/fixture.mp4',name,type:'video/mp4',duration:1,width:160,height:240});}
 async function create(page,title='Drehung'){const d=await rpc(page,'edit');const videos=await add(page,d);return rpc(page,'save',{token:d.token,title,description:'Schritte und Zählzeit',status:'Am Üben',tags:['Drehung'],videos});}
 
@@ -87,7 +94,7 @@ test('native cloud upload preserves the server reservation/finalize/commit contr
   const request=route.request(),url=new URL(request.url());const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};
   if(request.method()==='OPTIONS'){await route.fulfill({status:204,headers});return;}
   let result={ok:true};
-  if(url.pathname==='/auth/v1/verify')result={access_token:'test-token',refresh_token:'test-refresh',expires_in:3600};
+  if(url.pathname==='/auth/v1/verify')result={access_token:'test-token',refresh_token:'test-refresh',expires_in:3600,user:{id:'writer',email:'writer@example.test'}};
   else if(url.pathname==='/functions/v1/cloud'){
    const {action,payload}=request.postDataJSON();actions.push({action,payload});
    if(action==='state')result={me:{id:'native-owner',is_admin:false},libraries:[],own_figures:[]};
@@ -98,7 +105,7 @@ test('native cloud upload preserves the server reservation/finalize/commit contr
   }
   try{await route.fulfill({status:200,headers,contentType:'application/json',body:JSON.stringify(result)});}catch{/* canceled request */}
  });
- await rpc(page,'login',{link:'https://rodriges17.github.io/SalsaAppCloud/?token_hash=unit-test-token-hash-1234567890123456&type=magiclink'});
+ await loginAndConfirm(page,'https://rodriges17.github.io/SalsaAppCloud/?token_hash=unit-test-token-hash-1234567890123456&type=magiclink');
  await rpc(page,'cloudState');actions.length=0;
  const f=await create(page);await rpc(page,'cloudUpload',{id:f.id,videos:f.videoIds,library:'library-1',allowed:true});
  assert.deepEqual(actions.map(a=>a.action),['reserve','finalize','commit','attach']);assert.equal(actions[2].payload.public_allowed,true);assert.deepEqual(uploaded[0],await readFile(new URL('./fixtures/video.mp4',import.meta.url)));
@@ -720,7 +727,7 @@ test('active Android cloud upload retains saved figure and retries attachment wi
   await page.route('https://tzaprobvauikssnpiucl.supabase.co/**',async route=>{
    const req=route.request(),url=new URL(req.url()),headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};
    if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});let result={ok:true};
-   if(url.pathname==='/auth/v1/verify')result={access_token:'test-token',refresh_token:'refresh',expires_in:3600};
+   if(url.pathname==='/auth/v1/verify')result={access_token:'test-token',refresh_token:'refresh',expires_in:3600,user:{id:'writer',email:'writer@example.test'}};
    else if(url.pathname==='/functions/v1/cloud'){
     const {action,payload}=req.postDataJSON();calls.push(action);
     if(action==='state')result={me:{id:'writer',email:'writer@example.test',is_admin:false,upload_enabled:true,used:0,quota:500000000},libraries:[{id:'library',title:'Privat',visibility:'private',contribute:true}],own_figures:saved?[saved]:[]};
@@ -731,7 +738,7 @@ test('active Android cloud upload retains saved figure and retries attachment wi
    }else if(url.pathname.startsWith('/storage/'))transfers++;
    return route.fulfill({status:200,headers,contentType:'application/json',body:JSON.stringify(result)});
   });
-  await rpc(page,'login',{link:'https://rodriges17.github.io/SalsaAppCloud/?token_hash=test-token&type=magiclink'});
+  await loginAndConfirm(page,'https://rodriges17.github.io/SalsaAppCloud/?token_hash=test-token&type=magiclink');
   const figure=await create(page,'Aktiver Upload');
   await page.evaluate(key=>AndroidAppUI.show('cloud',key),{id:figure.id});
   await page.getByRole('combobox',{name:'Bibliothek',exact:true}).selectOption('library');
