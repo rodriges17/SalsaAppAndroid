@@ -1046,7 +1046,7 @@ export async function openCloud(local = null, library = null) {
   if (document.activeElement?.matches('input, textarea, [contenteditable=true]')) document.activeElement.blur();
   loginTrigger.hidden = signedIn(); accountTrigger.hidden = !state?.me || displayedOwner !== cloudIdentity();
   dialog.showModal();
-  cacheStatus('Cloud-Inhalte werden geladen …');
+  cacheStatus(navigator.onLine ? 'Cloud-Inhalte werden geladen …' : 'Offline – gespeicherte Inhalte werden geladen …');
   // Paint the selected Cloud screen before cache reads and device/preview work.
   const openingEpoch = ++viewEpoch;
   await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
