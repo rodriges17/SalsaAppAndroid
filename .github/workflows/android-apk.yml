@@ -118,21 +118,21 @@ jobs:
       - name: Install and fingerprint emulator runtime
         id: emulator-runtime
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-35;google_apis;x86_64'
-          fingerprint=$(cat "$ANDROID_HOME/emulator/package.xml" "$ANDROID_HOME/system-images/android-35/google_apis/x86_64/package.xml" | sha256sum | cut -d ' ' -f 1)
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-35;default;x86_64'
+          fingerprint=$(cat "$ANDROID_HOME/emulator/package.xml" "$ANDROID_HOME/system-images/android-35/default/x86_64/package.xml" | sha256sum | cut -d ' ' -f 1)
           echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
       - name: Restore clean emulator snapshot
         id: avd-cache
         uses: actions/cache/restore@v4
         with:
           path: ~/.android/avd/
-          key: avd-ubuntu24-x64-api35-pixel2-v1-${{ steps.emulator-runtime.outputs.fingerprint }}
+          key: avd-ubuntu24-x64-api35-default-pixel2-v1-${{ steps.emulator-runtime.outputs.fingerprint }}
       - name: Create clean emulator snapshot on cache miss
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
-          target: google_apis
+          target: default
           arch: x86_64
           profile: pixel_2
           avd-name: stepbystep-ci
@@ -162,7 +162,7 @@ jobs:
           STEPBYSTEP_VERIFY_UPGRADE: ${{ github.event_name != 'pull_request' }}
         with:
           api-level: 35
-          target: google_apis
+          target: default
           arch: x86_64
           profile: pixel_2
           avd-name: stepbystep-ci
