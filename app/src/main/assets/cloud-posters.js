@@ -77,7 +77,9 @@ async function videoPoster(revision, signal) {
 }
 export function createPosterView(root, user) {
   const controller = new AbortController(), urls = new Set(), jobs = new Map(), owner = cloudIdentity(), generation = cloudCacheRevision(owner); let figures;
-  const locals = () => figures ??= listFigures().catch(() => []);
+  // A saved poster is metadata, not proof that its video's bytes are readable.
+  // The availability controller verifies media separately without blocking paint.
+  const locals = () => figures ??= listFigures({ cached: true, signal: controller.signal }).catch(() => []);
   const observer = new IntersectionObserver(entries => {
     for (const entry of entries) if (entry.isIntersecting) { observer.unobserve(entry.target); jobs.get(entry.target)?.(); }
   }, { root: root.closest('.cloud-scroll') ?? root, rootMargin: '100px' });
