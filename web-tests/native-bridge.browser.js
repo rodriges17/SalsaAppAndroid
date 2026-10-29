@@ -535,6 +535,49 @@ test('Android Cloud navigation remains usable and shares a pending device-folder
  }finally{await context.close();}
 });
 
+test('Android opens Cloud from the shell before a device-folder refresh finishes',async()=>{
+ const {page,context}=await setup();try{
+  const app=await create(page);const folder=(await rpc(page,'folder',{action:'choose'})).activeFolder;
+  const copy=await rpc(page,'transfer',{id:app.id,target:folder});
+  await page.route('**/functions/v1/cloud',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({me:null,libraries:[],own_figures:[]})}));
+  await page.reload();await page.waitForFunction(()=>window.nativeReady);
+  await page.waitForFunction(id=>{const card=document.querySelector(`[data-figure-id="${id}"]`);return card&&!card.textContent.includes('wird geprüft');},copy.id);
+  await page.evaluate(()=>{
+   window.holdLibraryReads=true;
+   window.cloudEntry=AndroidAppUI.show('cloud');window.cloudEntry.catch(()=>{});
+  });
+  await page.locator('#cloudDialog').waitFor({state:'visible',timeout:1500});
+  await page.waitForFunction(()=>window.pendingLibraryReads.length>0);
+  assert.equal(await page.locator('#cloudDialog').isVisible(),true);
+  await page.evaluate(()=>{window.holdLibraryReads=false;window.pendingLibraryReads.splice(0).forEach(resolve=>resolve());});
+  await page.evaluate(()=>window.cloudEntry);
+ }finally{await context.close();}
+});
+
+test('Android Cloud thumbnails use saved posters without inspecting device videos',async()=>{
+ const {page,context}=await setup();try{
+  await rpc(page,'folder',{action:'choose'});
+  await page.evaluate(async()=>{
+   const storage=await import('./storage.js'),canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;
+   canvas.getContext('2d').fillRect(0,0,64,64);
+   const poster=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg'));
+   await storage.saveFigure({id:'poster-copy',title:'Lokales Vorschaubild',description:'',tags:[],status:'Neu',importFingerprint:'cloud:poster-revision:remote-video'},
+    [{id:'poster-video',name:'Video',blob:await(await fetch('/fixture.mp4')).blob(),poster,confirmed:true,duration:1}]);
+  });
+  await page.route('**/functions/v1/cloud',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({poster:null})}));
+  await page.evaluate(async()=>{
+   window.fileCalls.length=0;
+   const {createPosterView}=await import('./cloud-posters.js');
+   const root=document.createElement('div');root.id='poster-probe';root.style.cssText='position:fixed;top:0;left:0;width:64px;height:64px;z-index:9999';
+   const picture=document.createElement('div');root.append(picture);document.body.append(root);
+   window.posterProbe=createPosterView(root,null);posterProbe.add(picture,{id:'poster-revision',videos:[{id:'remote-video'}]});
+  });
+  await page.locator('#poster-probe img.cloud-thumbnail').waitFor();
+  assert.equal(await page.evaluate(()=>fileCalls.filter(c=>c.op==='stat'&&c.path.includes('/media/')).length),0,'Rendering a thumbnail must not verify local video files');
+  await page.evaluate(()=>posterProbe.dispose());
+ }finally{await context.close();}
+});
+
 test('cached Android folder summaries do not probe files or claim access after permission is revoked',async()=>{
  const {page,context}=await setup();try{
   const app=await create(page);const folder=(await rpc(page,'folder',{action:'choose'})).activeFolder;

@@ -3,7 +3,7 @@ import { mountTagPicker } from './tag-picker.js';
 import { createFigureEditSession } from './figure-edit-session.js';
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-29-cloud-navigation-v1';
+const APP_VERSION = '2026-10-29-cloud-entry-v1';
 import { createOverviewLoader } from './overview-loader.js';
 import { retireAndroidShellCaches } from './android-shell-cleanup.js';
 import { initBackup } from './backup-ui.js';
@@ -787,7 +787,7 @@ async function chooseCloudImport({ title, fingerprint, revisionIds, figureId }) 
     document.body.append(dialog); dialog.showModal(); actions.firstChild.focus();
   });
 }
-initCloud({ settings: () => $('infoButton').click(), openLocal: figure => { openEditor(figure); }, confirm: confirmAction, closed: () => { void refresh(); if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, localSaved: () => toast('Figur lokal gespeichert.') });
+initCloud({ settings: () => $('infoButton').click(), openLocal: figure => { openEditor(figure); }, confirm: confirmAction, closed: () => { void refresh({ cached: true }); if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, localSaved: () => toast('Figur lokal gespeichert.') });
 await refresh({ cached: true });
 // Old interrupted imports are housekeeping, not a prerequisite for the overview.
 requestAnimationFrame(() => setTimeout(() => {
@@ -848,6 +848,7 @@ window.AndroidAppUI = {
     } finally { if (incomingPreparation === preparation) incomingPreparation = null; }
   },
   async show(action, key = null) {
+    if (action === 'cloud' && !key) return openCloud();
     await refresh();
     const f = key ? figures.find(f => f.id === key.id && (f.storageFolder ?? null) === (key.storageFolder ?? null)) : null;
     if (key && !f) throw new Error('Figur nicht mehr vorhanden.');
