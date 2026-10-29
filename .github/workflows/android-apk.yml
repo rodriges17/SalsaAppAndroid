@@ -52,7 +52,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Install Android SDK Platform 35
-        run: yes | sdkmanager 'platforms;android-35' 'build-tools;35.0.0' || true
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -118,7 +118,7 @@ jobs:
       - name: Install and fingerprint emulator runtime
         id: emulator-runtime
         run: |
-          sdkmanager 'emulator' 'system-images;android-35;google_apis;x86_64'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-35;google_apis;x86_64'
           fingerprint=$(cat "$ANDROID_HOME/emulator/package.xml" "$ANDROID_HOME/system-images/android-35/google_apis/x86_64/package.xml" | sha256sum | cut -d ' ' -f 1)
           echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
       - name: Restore clean emulator snapshot
