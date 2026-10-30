@@ -1,22 +1,23 @@
 // Show persisted summaries before slow device-folder checks. Each explicit
 // refresh supersedes its predecessor. Lifecycle events reuse a pending check.
-export function createOverviewLoader({ list, render, failed, defer, now = Date.now, maxAge = 60_000 }) {
-  let current, verified, verifiedAt;
+export function createOverviewLoader({ list, render, failed, defer, now = Date.now, maxAge = 60_000, revision = () => 0 }) {
+  let current, verified, verifiedAt, verifiedRevision;
 
   async function refresh({ cached = false, strict = false } = {}) {
+    if (verified && verifiedRevision !== revision()) verified = undefined;
     // Tab changes reuse verified results, including while a background check is
     // pending. Explicit mutation/repair refreshes always bypass this cache.
-    if (cached && !strict && current?.pending) return;
+    if (cached && !strict && current?.pending && current.revision === revision()) return;
     if (cached && !strict && verified && now() - verifiedAt < maxAge) {
       render(verified);
       return;
     }
     current?.controller.abort();
-    const active = { controller: new AbortController(), pending: true }; current = active;
+    const active = { controller: new AbortController(), pending: true, revision: revision() }; current = active;
     const signal = active.controller.signal;
     const apply = figures => {
       if (current !== active || signal.aborted) return;
-      if (!figures.some(f => f.storageChecking)) { verified = figures; verifiedAt = now(); }
+      if (!figures.some(f => f.storageChecking)) { verified = figures; verifiedAt = now(); verifiedRevision = active.revision; }
       render(figures);
     };
     const report = error => { if (current === active && !signal.aborted) failed(error); };

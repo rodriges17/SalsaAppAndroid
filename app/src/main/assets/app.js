@@ -14,7 +14,7 @@ import { initCloud, openCloud, closeCloud } from './cloud.js';
 import { importFigure } from './package.js';
 import { checksum } from './package.js';
 import { STATUSES, timeLabel, filterFigures, ABLoop } from './logic.js';
-import { listFigures, figureVideos, figureMedia, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, allowFolderAccess, setStorageFolder, transferFigure } from './storage.js';
+import { localStorageRevision, listFigures, figureVideos, figureMedia, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, allowFolderAccess, setStorageFolder, transferFigure } from './storage.js';
 
 const $ = id => document.getElementById(id);
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
@@ -67,6 +67,7 @@ addEventListener('cloud-session-changed', () => closeMenus());
 function closeMenus() { document.querySelectorAll('.card-menu').forEach(n => n.remove()); document.querySelectorAll('.card-options').forEach(n => n.setAttribute('aria-expanded', 'false')); }
 const overviewLoader = createOverviewLoader({
   list: listFigures,
+  revision: localStorageRevision,
   render: loaded => { figures = loaded; renderOverview(); },
   failed: error => { $('empty').hidden = false; $('empty').replaceChildren(el('h2', '', 'Speicher nicht verfügbar'), el('p', '', storageMessage(error))); },
   defer: work => requestAnimationFrame(() => setTimeout(work, 0))

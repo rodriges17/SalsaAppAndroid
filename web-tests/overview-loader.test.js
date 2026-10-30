@@ -69,3 +69,10 @@ test('explicit post-save refresh reports a failed or superseded overview to its 
  const stale=h.refresh({strict:true});await h.refresh();delayed.resolve([{id:'stale'}]);
  await assert.rejects(stale,{name:'AbortError'});assert.equal(h.rendered.at(-1)[0].id,'fresh');
 });
+
+test('storage mutations outside the overview invalidate recent verified results',async()=>{
+ let version=0,calls=0;
+ const h=setup(()=>[{id:String(++calls)}],{revision:()=>version});
+ await h.refresh();await h.refresh({cached:true});assert.equal(calls,1);
+ version++;await h.resume();assert.equal(calls,2);assert.equal(h.rendered.at(-1)[0].id,'2');
+});
