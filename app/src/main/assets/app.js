@@ -1,9 +1,10 @@
+import { createPlayerView } from './player-view.js';
 import { connectTagSuggestions } from './tag-suggestions.js';
 import { mountTagPicker } from './tag-picker.js';
 import { createFigureEditSession } from './figure-edit-session.js';
 import { cloudLocalIndex } from './cloud-local.js';
 import { createLocalCardsView, tagIcon } from './figure-card.js';
-const APP_VERSION = '2026-10-30-shared-figure-cards-v1';
+const APP_VERSION = '2026-10-30-compact-player-v1';
 import { createOverviewLoader } from './overview-loader.js';
 import { retireAndroidShellCaches } from './android-shell-cleanup.js';
 import { initBackup } from './backup-ui.js';
@@ -28,6 +29,7 @@ const channel = 'BroadcastChannel' in window ? new BroadcastChannel(`salsa-train
 const loop = new ABLoop();
 let playIntent = false, wakeLock = null;
 const video = $('learningVideo');
+const playerView = createPlayerView({screen:$('playerScreen'),video,isActive:()=>!!learning,togglePlayback:()=>{if(video.paused)play();else pause();}});
 
 function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, 4500); }
 function setError(id, message) { $(id).textContent = message ?? ''; $(id).hidden = !message; }
@@ -351,6 +353,11 @@ function cleanupPreview() { previewVideo.pause(); previewVideo.removeAttribute('
 
 window.addEventListener('popstate', async event => {
   const target = event.state?.view ?? 'home';
+  if (learning && target === 'player') {
+    if (!event.state?.playerFullscreen) void playerView.exit({history:false});
+    else if (!playerView.full) void playerView.enter({history:false});
+    route = 'player'; return;
+  }
   if (route === 'preview') {
     const session = preview?.session, next = session?.endPreview();
     cleanupPreview(); route = target;
@@ -380,10 +387,10 @@ async function openPlayer(figure) {
   if (opening || editor || learning) return; opening = true;
   try {
     const records = await figureMedia(figure, { verifyAccess: true });
-    learning = { figure, records, index: 0, crop: false, landscape: false, fullLoop: false, speed: 1 };
+    learning = { figure, records, index: 0, crop: false, landscape: false, speed: 1 };
     loop.clear(); $('playerTitle').textContent = figure.title; $('playerDescription').textContent = figure.description;
     $('playerVideoChoice').replaceChildren(); records.forEach((record, index) => { const option = el('option', '', record.name || `Video ${index + 1}`); option.value = String(index); $('playerVideoChoice').append(option); });
-    $('playerVideoChoice').parentElement.hidden = records.length <= 1; $('speed').value = '1'; $('fitCrop').textContent = 'Fit'; $('fitCrop').setAttribute('aria-pressed', 'false'); $('fullLoop').setAttribute('aria-pressed', 'false'); $('rotatePlayer').setAttribute('aria-pressed', 'false');
+    $('playerVideoChoice').parentElement.hidden = records.length <= 1; $('speed').value = '1'; $('fitCrop').textContent = 'Fit'; $('fitCrop').setAttribute('aria-pressed', 'false'); $('rotatePlayer').setAttribute('aria-pressed', 'false');
     $('videoStage').classList.remove('crop'); $('playerScreen').classList.remove('is-landscape'); $('playerScreen').hidden = false; $('overview').hidden = true; $('overview').inert = true; document.body.classList.add('playing-screen');
     pushRoute('player'); loadPlayerVideo(0, false); $('playerBack').focus();
   } catch (error) { toast(storageMessage(error)); } finally { opening = false; }
@@ -394,7 +401,7 @@ async function loadPlayerVideo(index, autoplay) {
   const active = learning, request = ++playerLoad, record = active.records[index];
   playIntent = autoplay; video.pause(); releaseWakeLock();
   if (videoURL) { video.removeAttribute('src'); video.load(); releaseURL(videoURL); }
-  learning.index = index; $('playerVideoChoice').value = String(index); loop.clear(); updateLoop(); setError('playerError', null); $('videoLoading').hidden = false;
+  learning.index = index; $('playerTitle').textContent = record.name || active.figure.title; $('playerVideoChoice').value = String(index); loop.clear(); updateLoop(); showPlayerError(null); $('videoLoading').hidden = false;
   $('seek').value = '0'; $('position').textContent = '0:00'; $('duration').textContent = timeLabel(learning.records[index].duration);
   $('playPause').textContent = '▶'; $('playPause').setAttribute('aria-label', 'Abspielen');
   try {
@@ -404,12 +411,22 @@ async function loadPlayerVideo(index, autoplay) {
   } catch (error) {
     if (learning !== active || request !== playerLoad) return;
     playIntent = false; $('videoLoading').hidden = true;
-    setError('playerError', storageMessage(error));
+    showPlayerError(storageMessage(error));
   }
 }
-video.addEventListener('loadedmetadata', () => { if (!learning) return; if (!Number.isFinite(video.duration) || video.duration <= 0) { setError('playerError', 'Das Video konnte nicht geladen werden.'); return; } $('seek').max = String(video.duration); $('duration').textContent = timeLabel(video.duration); video.playbackRate = learning.speed; });
-video.addEventListener('loadeddata', () => { $('videoLoading').hidden = true; if (learning && playIntent && !document.hidden) play(); });
-video.addEventListener('error', () => { if (learning) { playIntent = false; $('videoLoading').hidden = true; setError('playerError', 'Dieses Video wird vom Browser nicht unterstützt oder ist nicht mehr lesbar. Bitte die Figur bearbeiten und das Video ersetzen.'); } });
+video.addEventListener('loadedmetadata', () => { if (!learning) return; if (!Number.isFinite(video.duration) || video.duration <= 0) { playIntent = false; $('videoLoading').hidden = true; showPlayerError('Das Video konnte nicht geladen werden.'); return; } $('seek').max = String(video.duration); $('duration').textContent = timeLabel(video.duration); video.playbackRate = learning.speed; });
+video.addEventListener('loadeddata', () => {
+  if (!learning) return;
+  // A tiny paused seek makes Android/WebKit paint a decoded first frame without
+  // briefly playing (or emitting sound). Subsequent seeks retain the position.
+  if (!playIntent && video.currentTime === 0 && video.duration > 0.001) video.currentTime = Math.min(0.001, video.duration / 2);
+  else $('videoLoading').hidden = true;
+  if (playIntent && !document.hidden) { $('videoLoading').hidden = true; play(); }
+});
+video.addEventListener('seeked', () => { if (learning && video.readyState >= 2) $('videoLoading').hidden = true; });
+function showPlayerError(message) { setError('playerError', message); $('retryPlayer').hidden = !message; }
+$('retryPlayer').onclick = () => { if (learning) loadPlayerVideo(learning.index, false); };
+video.addEventListener('error', () => { if (learning) { playIntent = false; $('videoLoading').hidden = true; showPlayerError('Dieses Video wird vom Browser nicht unterstützt oder ist nicht mehr lesbar. Bitte die Figur bearbeiten und das Video ersetzen.'); } });
 async function play() {
   if (!learning) return; playIntent = true;
   if (video.readyState < 2) return;
@@ -436,7 +453,7 @@ video.addEventListener('timeupdate', tick);
 setInterval(() => { if (learning && !video.paused && !document.hidden) tick(); }, 30);
 video.addEventListener('ended', () => {
   if (!learning) return; const target = loop.target(video.duration, true);
-  if (target !== null || learning.fullLoop) { video.currentTime = target ?? 0; play(); }
+  if (target !== null) { video.currentTime = target; play(); }
   else { playIntent = false; releaseWakeLock(); }
 });
 $('playPause').onclick = () => { if (video.paused) play(); else pause(); };
@@ -445,15 +462,15 @@ $('seek').addEventListener('input', () => { if (learning && Number.isFinite(vide
 $('speed').onchange = () => { if (learning) { learning.speed = Number($('speed').value); video.playbackRate = learning.speed; } };
 $('fitCrop').onclick = () => { if (learning) { learning.crop = !learning.crop; $('videoStage').classList.toggle('crop', learning.crop); $('fitCrop').textContent = learning.crop ? 'Crop' : 'Fit'; $('fitCrop').setAttribute('aria-pressed', String(learning.crop)); } };
 $('rotatePlayer').onclick = () => { if (learning) { learning.landscape = !learning.landscape; $('playerScreen').classList.toggle('is-landscape', learning.landscape); $('rotatePlayer').setAttribute('aria-pressed', String(learning.landscape)); } };
-$('fullLoop').onclick = () => { if (learning) { learning.fullLoop = !learning.fullLoop; if (learning.fullLoop) loop.clear(); updateLoop(); } };
-$('markA').onclick = () => { if (learning) { learning.fullLoop = false; loop.setA(video.currentTime); updateLoop(); } };
-$('markB').onclick = () => { if (learning) { learning.fullLoop = false; loop.setB(video.currentTime); updateLoop(); } };
+$('markA').onclick = () => { if (learning) { loop.setA(video.currentTime); updateLoop(); } };
+$('markB').onclick = () => { if (learning) { loop.setB(video.currentTime); updateLoop(); } };
 $('clearAB').onclick = () => { loop.clear(); updateLoop(); };
-function updateLoop() { $('fullLoop').setAttribute('aria-pressed', String(!!learning?.fullLoop)); $('abStatus').textContent = loop.a === null ? '' : `A ${timeLabel(loop.a)} · B ${loop.b === null ? '–' : timeLabel(loop.b)}`; $('clearAB').disabled = loop.a === null; $('markB').disabled = loop.a === null || video.currentTime <= loop.a + 0.1; }
+function updateLoop() { $('abStatus').textContent = loop.a === null ? '' : `A ${timeLabel(loop.a)} · B ${loop.b === null ? '–' : timeLabel(loop.b)}`; $('clearAB').disabled = loop.a === null; $('markB').disabled = loop.a === null || video.currentTime <= loop.a + 0.1; }
 $('playerVideoChoice').onchange = () => { if (learning) loadPlayerVideo(Number($('playerVideoChoice').value), !video.paused); };
-$('fullscreen').onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else if ($('playerScreen').requestFullscreen) await $('playerScreen').requestFullscreen(); else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); else toast('Diese Ansicht nutzt bereits die verfügbare Displayfläche.'); } catch { toast('Vollbild wird von diesem Browser nicht freigegeben.'); } };
-$('playerBack').onclick = () => history.back();
+$('fullscreen').onclick = () => playerView.toggle();
+$('playerBack').onclick = () => { if (!playerView.back()) history.back(); };
 function closePlayer() {
+  playerView.reset();
   window.stepNativePlayer?.reset();
   $('playerScreen').classList.remove('is-native-fullscreen');
   ++playerLoad;
@@ -463,7 +480,7 @@ function closePlayer() {
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) { pause(); previewVideo.pause(); } else overviewLoader.resume(); });
 window.addEventListener('pagehide', () => { pause(); previewVideo.pause(); });
-document.addEventListener('keydown', event => { if (event.key === 'Escape' && learning && !document.fullscreenElement) { event.preventDefault(); history.back(); } });
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && learning) { event.preventDefault(); if (!playerView.back()) history.back(); } });
 
 
 let deviceBusy = false, storageChoicePending = false;

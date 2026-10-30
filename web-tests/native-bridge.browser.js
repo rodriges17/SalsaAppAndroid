@@ -876,3 +876,79 @@ import {runCloudCardLifetimeCase} from './figure-cards-case.js';
 test('shared cloud preview lifetime handles late responses in own and library cards',async()=>{
  const {page,context}=await setup();try{await runCloudCardLifetimeCase(page,{root:'/',fixture:'/fixture.mp4'});}finally{await context.close();}
 });
+
+test('player shows a paused first frame and retries a failed video without reopening the figure',async()=>{
+ const {page,context}=await setup();try{
+  const f=await create(page,'Erstes Bild');await page.evaluate(()=>AndroidAppUI.show('overview'));
+  await page.locator(`[data-figure-id="${f.id}"] .card-main`).click();
+  await page.waitForFunction(()=>{const v=document.querySelector('#learningVideo');return v.videoWidth>0&&v.readyState>=2;});
+  assert.equal(await page.locator('#learningVideo').evaluate(v=>v.paused),true);
+  await page.locator('#learningVideo').evaluate(v=>v.dispatchEvent(new Event('error')));
+  await page.getByRole('button',{name:'Erneut versuchen',exact:true}).click({timeout:1500});
+  await page.waitForFunction(()=>document.querySelector('#videoLoading').hidden&&document.querySelector('#learningVideo').readyState>=2);
+  assert.equal(await page.locator('#learningVideo').evaluate(v=>v.paused),true);
+  assert.equal(await page.locator('#playerError').isVisible(),false);
+ }finally{await context.close();}
+});
+
+test('compact player has no full-video loop and preserves A–B while normal videos end and restart',async()=>{
+ const {page,context}=await setup();try{
+  const f=await create(page,'Kompakte Bedienung');await page.evaluate(()=>AndroidAppUI.show('overview'));
+  await page.locator(`[data-figure-id="${f.id}"] .card-main`).click();
+  await page.waitForFunction(()=>document.querySelector('#learningVideo').readyState>=2);
+  assert.equal(await page.getByRole('button',{name:'Loop',exact:true}).count(),0);
+  await page.locator('#playPause').click();
+  await page.waitForFunction(()=>document.querySelector('#learningVideo').ended);
+  assert.equal(await page.locator('#learningVideo').evaluate(v=>v.paused),true);
+  await page.locator('#playPause').click();await page.waitForFunction(()=>!document.querySelector('#learningVideo').paused&&!document.querySelector('#learningVideo').ended);
+  await page.locator('#playPause').click();
+  await page.locator('#learningVideo').evaluate(v=>v.currentTime=.1);await page.locator('#markA').click();
+  await page.locator('#learningVideo').evaluate(v=>v.currentTime=.5);await page.locator('#markB').click();
+  assert.match(await page.locator('#abStatus').textContent(),/A .*B/);
+  assert.equal(await page.locator('#clearAB').isEnabled(),true);
+ }finally{await context.close();}
+});
+
+test('fullscreen uses only video and the first Back preserves playback state in the normal player',async()=>{
+ const {page,context}=await setup();try{
+  await page.setViewportSize({width:390,height:844});
+  await page.evaluate(()=>{AndroidPlatform.fullscreen=value=>window.playerNativeFull=value;});
+  const f=await create(page,'Nur Video');await page.evaluate(()=>AndroidAppUI.show('overview'));
+  await page.locator(`[data-figure-id="${f.id}"] .card-main`).click();
+  await page.waitForFunction(()=>document.querySelector('#learningVideo').readyState>=2);
+  await page.locator('#speed').selectOption('0.5');
+  await page.locator('#learningVideo').evaluate(v=>v.currentTime=.3);
+  await page.locator('#fullscreen').click();
+  assert.equal(await page.locator('#playerScreen .screen-header').evaluate(n=>n.inert),true);
+  const dimensions=await page.locator('#videoStage').evaluate(n=>({video:n.getBoundingClientRect().height,screen:n.closest('#playerScreen').getBoundingClientRect().height}));
+  assert.ok(Math.abs(dimensions.video-dimensions.screen)<2);
+  assert.equal(await page.evaluate(()=>window.playerNativeFull),true);
+  await page.evaluate(()=>AndroidAppUI.back());
+  await page.waitForFunction(()=>!document.querySelector('#playerScreen').classList.contains('is-native-fullscreen'));
+  assert.equal(await page.locator('#playerScreen').isVisible(),true);
+  assert.equal(await page.locator('#speed').inputValue(),'0.5');
+  assert.ok(await page.locator('#learningVideo').evaluate(v=>v.paused&&v.currentTime>=.29));
+  await page.evaluate(()=>AndroidAppUI.back());await page.locator('#playerScreen').waitFor({state:'hidden'});
+ }finally{await context.close();}
+});
+
+test('fullscreen swipe reveals overlays, tap controls playback, and inactivity hides them without moving video',async()=>{
+ const {page,context}=await setup();try{
+  await page.setViewportSize({width:390,height:844});
+  const f=await create(page,'Gesten');await page.evaluate(()=>AndroidAppUI.show('overview'));
+  await page.locator(`[data-figure-id="${f.id}"] .card-main`).click();
+  await page.waitForFunction(()=>document.querySelector('#learningVideo').readyState>=2);
+  await page.clock.install();await page.locator('#fullscreen').click();
+  const before=await page.locator('#videoStage').boundingBox();
+  await page.mouse.move(190,570);await page.mouse.down();await page.mouse.move(190,390,{steps:6});await page.mouse.up();
+  assert.equal(await page.locator('#playerScreen .screen-header').evaluate(n=>n.inert),false);
+  assert.deepEqual(await page.locator('#videoStage').boundingBox(),before);
+  await page.locator('#playPause').click();await page.waitForFunction(()=>!document.querySelector('#learningVideo').paused);
+  await page.clock.fastForward(4100);
+  assert.equal(await page.locator('#playerScreen .screen-header').evaluate(n=>n.inert),true);
+  await page.mouse.click(190,350);assert.equal(await page.locator('#learningVideo').evaluate(v=>v.paused),true);
+  await page.keyboard.press('ArrowUp');assert.equal(await page.locator('#playerScreen .screen-header').evaluate(n=>n.inert),false);
+  await page.clock.fastForward(6000);assert.equal(await page.locator('#playerScreen .screen-header').evaluate(n=>n.inert),false);
+  await page.keyboard.press('ArrowDown');assert.equal(await page.locator('#playerScreen .screen-header').evaluate(n=>n.inert),true);
+ }finally{await context.close();}
+});

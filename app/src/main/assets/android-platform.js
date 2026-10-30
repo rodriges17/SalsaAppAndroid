@@ -1,7 +1,6 @@
 (() => {
   if(!window.AndroidPlatform)return;
-  let full=false;
-  window.stepNativePlayer={reset(){full=false;AndroidPlatform.fullscreen(false);AndroidPlatform.rotate(false);}};
+  window.stepNativePlayer={setFullscreen(enabled){AndroidPlatform.fullscreen(enabled);},reset(){AndroidPlatform.fullscreen(false);AndroidPlatform.rotate(false);}};
   addEventListener('DOMContentLoaded',()=>{
     for(const [selector,variable] of [['.overview > .heading','--brand-header-height'],['.page-intro','--overview-intro-height'],['.overview-filters','--overview-filters-height']]){
       const row=document.querySelector(selector);if(!row)continue;
@@ -15,8 +14,6 @@
     document.querySelector('#persistStorage').hidden=true;
     document.addEventListener('click',event=>{
       if(event.target.closest('#rotatePlayer')){const b=document.getElementById('rotatePlayer');AndroidPlatform.rotate(b.getAttribute('aria-pressed')!=='true');}
-      if(event.target.closest('#fullscreen')){event.preventDefault();event.stopImmediatePropagation();full=!full;document.getElementById('playerScreen').classList.toggle('is-native-fullscreen',full);AndroidPlatform.fullscreen(full);}
-      if(event.target.closest('#playerBack'))window.stepNativePlayer.reset();
     },true);
     const refreshWake=()=>AndroidPlatform.keepAwake([...document.querySelectorAll('video')].some(v=>!v.paused));
     document.addEventListener('play',refreshWake,true);document.addEventListener('pause',refreshWake,true);document.addEventListener('ended',refreshWake,true);
