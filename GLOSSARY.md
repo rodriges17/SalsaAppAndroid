@@ -45,3 +45,6 @@ Das durchsuchbare Mehrfachauswahlfeld mit vorhandenen Vorschlägen und einzeln e
 
 **Lokale Figuren-Bearbeitungssitzung**:
 Der vorübergehende Entwurf einer neuen, bestehenden oder importierten lokalen Figur mit Angaben und geordneten Videos. Er umfasst Videoprüfung und Bestätigung, Speichern und Verwerfen. Ungespeicherte Änderungen bestehen nur während der geöffneten Bearbeitung. Eine gespeicherte Figur bleibt unabhängig von der anschließenden Aktualisierung der Übersicht erhalten.
+
+**Personenfreigabe**:
+Der gemeinsame Ablauf zum Anlegen und Bearbeiten einer Person mit Kontofreigabe, Speicherlimit und Bibliothekszuweisungen. Der Entwurf hält erfolgreiche und offene Speicherschritte getrennt; Wiederholen führt nur offene Schritte aus. Verwerfen entfernt ausschließlich ungespeicherte Änderungen. Kontowechsel und Sitzungsablauf entwerten den Ablauf, ohne bereits gespeicherte Rechte zurückzunehmen.
