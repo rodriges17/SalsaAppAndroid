@@ -76,3 +76,11 @@ test('storage mutations outside the overview invalidate recent verified results'
  await h.refresh();await h.refresh({cached:true});assert.equal(calls,1);
  version++;await h.resume();assert.equal(calls,2);assert.equal(h.rendered.at(-1)[0].id,'2');
 });
+
+test('a mutation supersedes a pending cached check even when returning through resume',async()=>{
+ let version=0,calls=0;const first=pending();
+ const h=setup(()=>++calls===1?first.promise:[{id:'new'}],{revision:()=>version});
+ const old=h.refresh({cached:true});version++;await h.resume();
+ first.resolve([{id:'old'}]);await old;
+ assert.equal(calls,2);assert.deepEqual(h.rendered,[[{id:'new'}]]);
+});

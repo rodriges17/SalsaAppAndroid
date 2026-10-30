@@ -42,6 +42,6 @@ export function createOverviewLoader({ list, render, failed, defer, now = Date.n
   }
   // Focus and visibility can arrive together, including during cold startup.
   // Keep the first overview and any current validation; never restart its scan.
-  const resume = () => { if (!current?.pending) return refresh({ cached: true }); };
+  const resume = () => refresh({ cached: true });
   return { refresh, resume };
 }
