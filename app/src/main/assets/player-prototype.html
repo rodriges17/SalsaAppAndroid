@@ -1,0 +1,136 @@
+<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Player · Prototyp</title><style>body{margin:0;background:#17121d;color:#e9dff2;font-family:system-ui}section[hidden]{display:none!important}#prototype-switcher{position:sticky;bottom:8px;display:flex;gap:16px;justify-content:center;align-items:center;padding:10px;background:#33273f;border-radius:22px;margin:8px auto;width:max-content;color:#fff}#prototype-switcher button{font:inherit;min-width:44px;min-height:44px;background:#594269;border:0;border-radius:12px;color:#fff}i[data-lucide="play"]:before{content:'▶'}i[data-lucide="pause"]:before{content:'Ⅱ'}i[data-lucide="chevron-left"]:before{content:'‹'}i[data-lucide="rotate-cw"]:before{content:'↻'}</style><div class="viz-carousel viz-dotted-background" aria-label="Player-Varianten" data-previous-label="Zurück" data-next-label="Weiter" id="dance-player-demo">
+<style>
+#dance-player-demo .dp-wrap{padding:16px 8px;display:grid;justify-items:center;gap:12px;color:light-dark(#352b43,#ddd0ef);font:14px/1.45 system-ui,sans-serif}
+#dance-player-demo .dp-demo{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+#dance-player-demo button,#dance-player-demo select{font:inherit;cursor:inherit}
+#dance-player-demo .dp-demo button{padding:8px 12px;border:1px solid light-dark(#b8aec3,#63576f);border-radius:10px;background:light-dark(#f8f5fc,#2b2436);color:inherit;min-height:44px}
+#dance-player-demo .dp-phone{width:min(100%,360px);height:640px;background:#141019;color:#f4edf9;position:relative;overflow:hidden;border-radius:24px;border:1px solid #52455f;touch-action:none;isolation:isolate}
+#dance-player-demo .dp-top{position:absolute;inset:0 0 auto;z-index:4;height:64px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#1c1526;transition:transform .2s,opacity .2s}
+#dance-player-demo .dp-top strong{flex:1;font-size:18px;font-weight:600}
+#dance-player-demo .dp-phone button,#dance-player-demo .dp-phone select{background:#2a2036;border:1px solid #5d4b70;color:#e8d8fa;border-radius:12px;min-height:44px;padding:9px 10px}
+#dance-player-demo .dp-phone button svg{width:20px;height:20px;vertical-align:middle}
+#dance-player-demo .dp-top button{border:0;background:transparent;color:#d1b2f2}
+#dance-player-demo .dp-film{position:absolute;inset:64px 0 270px;background:#060607;overflow:hidden;display:flex;align-items:center;justify-content:center;transition:inset .2s}
+#dance-player-demo .dp-scene{width:78%;height:100%;position:relative;background:linear-gradient(180deg,#b4a092 0 44%,#726f70 44% 47%,#b69a79 47%);overflow:hidden;box-shadow:inset 0 0 50px #0005}
+#dance-player-demo .dp-scene:before{content:'';position:absolute;inset:12% 6% 52%;background:linear-gradient(90deg,#80939c,#bdc1b9 47%,#647e88);border:7px solid #423938;box-shadow:78px 0 0 -70px #f1e9cf}
+#dance-player-demo .dp-scene:after{content:'';position:absolute;inset:58% -30% -10%;background:repeating-linear-gradient(7deg,transparent 0 38px,#70523966 39px 41px);transform:perspective(170px) rotateX(25deg)}
+#dance-player-demo .dp-dancer{position:absolute;z-index:1;left:29%;bottom:20%;width:54px;height:46%;transform-origin:50% 100%}
+#dance-player-demo .dp-dancer.partner{left:53%;bottom:19%;transform:scale(.94);--shirt:#c4bfe0;--skin:#c28e71}
+#dance-player-demo .dp-dancer.lead{--shirt:#526e63;--skin:#b47c59}
+#dance-player-demo .dp-head{position:absolute;width:24px;height:29px;background:var(--skin);border-radius:45%;left:15px;top:0;border-top:7px solid #332723}
+#dance-player-demo .dp-body{position:absolute;top:28px;left:5px;width:42px;height:43%;border-radius:12px 14px 8px 8px;background:var(--shirt);transform:rotate(-6deg)}
+#dance-player-demo .dp-arm{position:absolute;top:39px;left:37px;width:13px;height:61px;background:var(--skin);border-radius:10px;transform-origin:top;transform:rotate(-58deg)}
+#dance-player-demo .partner .dp-arm{left:4px;transform:rotate(58deg)}
+#dance-player-demo .dp-leg{position:absolute;top:52%;width:19px;height:47%;background:#292b32;border-radius:6px;transform-origin:top;left:8px;transform:rotate(10deg)}
+#dance-player-demo .dp-leg.other{left:27px;transform:rotate(-12deg)}
+#dance-player-demo .dp-foot{position:absolute;bottom:-4px;width:28px;height:10px;background:#242125;border-radius:5px}
+#dance-player-demo .dp-caption{position:absolute;left:10px;bottom:8px;z-index:2;color:#fff;background:#0008;padding:3px 7px;border-radius:6px;font-size:11px}
+#dance-player-demo .dp-controls{position:absolute;inset:auto 0 65px;z-index:4;background:#1c1526;padding:12px;display:grid;gap:10px;transition:transform .2s,opacity .2s}
+#dance-player-demo .dp-times{display:flex;justify-content:space-between;color:#c5b5d3;font-size:12px}
+#dance-player-demo input[type=range]{width:100%;accent-color:#ccadf3;margin:0;min-height:24px}
+#dance-player-demo .dp-main{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:8px}
+#dance-player-demo .dp-phone .dp-play{background:#cfb0f3;color:#21152d;border-color:#cfb0f3}
+#dance-player-demo .dp-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#dance-player-demo .dp-tools button{flex:1;font-size:12px;padding:8px 5px}
+#dance-player-demo .dp-grab{display:none;width:38px;height:4px;border-radius:3px;background:#bba9cf;margin:0 auto 2px}
+#dance-player-demo .dp-ab{min-height:18px;color:#cbb8dc;font-size:12px}
+#dance-player-demo .dp-nav{position:absolute;inset:auto 0 0;height:65px;display:flex;align-items:center;justify-content:space-around;background:#21182c;border-top:1px solid #46374f;color:#bba8cd}
+#dance-player-demo .dp-nav span:first-child{color:#d1b4f0}
+#dance-player-demo .dp-phone.is-full .dp-film{inset:0}
+#dance-player-demo .dp-phone.is-full .dp-top{background:linear-gradient(#100b19ee,#100b1966);transform:translateY(-100%);opacity:0;pointer-events:none}
+#dance-player-demo .dp-phone.is-full .dp-controls{bottom:0;background:linear-gradient(#191222dd,#191222fa);transform:translateY(100%);opacity:0;pointer-events:none}
+#dance-player-demo .dp-phone.is-full .dp-nav{display:none}
+#dance-player-demo .dp-phone.is-full.controls-open .dp-top,#dance-player-demo .dp-phone.is-full.controls-open .dp-controls{transform:none;opacity:1;pointer-events:auto}
+#dance-player-demo .dp-phone.is-full .dp-grab{display:block}
+#dance-player-demo .dp-phone.is-full .dp-caption{display:none}
+#dance-player-demo .dp-phone.is-crop .dp-scene{width:100%}
+#dance-player-demo .dp-phone.is-landscape{height:360px;width:min(100%,640px)}
+#dance-player-demo .dp-phone.is-landscape .dp-scene{width:40%}
+#dance-player-demo .dp-phone.is-landscape .dp-dancer{height:55%;bottom:12%}
+#dance-player-demo .dp-phone.is-landscape .dp-controls{padding:8px 14px;gap:4px}
+#dance-player-demo .dp-phone.is-landscape .dp-top{height:52px}
+#dance-player-demo .dp-state{font-size:12px;min-height:36px;text-align:center;max-width:360px;color:light-dark(#5b4b6b,#c4b3d4)}
+#dance-player-demo .dp-kind{font-size:12px;color:light-dark(#5b4b6b,#c4b3d4)}
+#dance-player-demo [data-variant="Lernpult"] .dp-controls{gap:12px;padding:16px}
+#dance-player-demo [data-variant="Lernpult"] .dp-tools{display:grid;grid-template-columns:1fr 1fr 1fr}
+#dance-player-demo [data-variant="Lernpult"] .dp-tools .dp-a,#dance-player-demo [data-variant="Lernpult"] .dp-tools .dp-b{grid-column:auto;font-size:14px;min-height:52px}
+#dance-player-demo [data-variant="Lernpult"] .dp-tools .dp-clear{grid-column:auto}
+#dance-player-demo [data-variant="Lernpult"] .dp-film{bottom:330px}
+#dance-player-demo [data-variant="Lernpult"] .dp-phone.is-full .dp-film{bottom:0}
+#dance-player-demo [data-variant="Lernpult"] .dp-phone.is-full .dp-controls{border-radius:24px 24px 0 0;background:#231a2ef5}
+#dance-player-demo [data-variant="Schwebend"] .dp-phone.is-full .dp-controls{inset:auto 10px 12px;border:1px solid #72608066;border-radius:22px;background:#1e1729ed;padding:12px}
+#dance-player-demo [data-variant="Schwebend"] .dp-phone.is-full .dp-top{inset:12px 10px auto;border-radius:16px;background:#1e1729ed;height:52px}
+#dance-player-demo [data-variant="Schwebend"] .dp-phone.is-full:not(.controls-open) .dp-top{transform:translateY(-140%)}
+@media(prefers-reduced-motion:reduce){#dance-player-demo *{transition:none!important}}
+</style>
+<section data-variant="Kompakt" aria-label="Kompakter Player">
+<div class="dp-wrap">
+<div class="dp-kind">Prototyp · Videobild simuliert</div>
+<div class="dp-phone" aria-label="Interaktiver Lernplayer">
+<header class="dp-top"><button class="dp-back cursor-interaction" aria-label="Vollbild verlassen"><i data-lucide="chevron-left" aria-hidden="true"></i></button><strong>Sombrero simple</strong><button class="dp-rotate cursor-interaction" aria-label="Video drehen"><i data-lucide="rotate-cw" aria-hidden="true"></i></button></header>
+<div class="dp-film" aria-label="Erstes Videobild, pausiert"><div class="dp-scene"><div class="dp-dancer lead"><span class="dp-head"></span><span class="dp-body"></span><span class="dp-arm"></span><span class="dp-leg"><span class="dp-foot"></span></span><span class="dp-leg other"><span class="dp-foot"></span></span></div><div class="dp-dancer partner"><span class="dp-head"></span><span class="dp-body"></span><span class="dp-arm"></span><span class="dp-leg"><span class="dp-foot"></span></span><span class="dp-leg other"><span class="dp-foot"></span></span></div><span class="dp-caption">Erstes Videobild · pausiert</span></div></div>
+<div class="dp-controls"><span class="dp-grab" aria-hidden="true"></span><input class="dp-progress cursor-interaction" type="range" min="0" max="19" step="0.1" value="0" aria-label="Videoposition"><div class="dp-times"><span class="dp-now">0:00</span><span>0:19</span></div><div class="dp-main"><button class="dp-rewind cursor-interaction">−5 s</button><button class="dp-play cursor-interaction" aria-label="Abspielen"><i data-lucide="play" aria-hidden="true"></i></button><select class="dp-speed cursor-interaction" aria-label="Geschwindigkeit"><option value="1">1×</option><option value="0.75">0,75×</option><option value="0.5">0,5×</option><option value="0.25">0,25×</option></select></div><div class="dp-tools"><button class="dp-fit cursor-interaction">Fit</button><button class="dp-a cursor-interaction">A</button><button class="dp-b cursor-interaction" disabled>B</button><button class="dp-clear cursor-interaction" disabled>A–B löschen</button><button class="dp-full cursor-interaction">Vollbild</button></div><div class="dp-ab" aria-live="polite">Kein A–B-Bereich</div></div>
+<nav class="dp-nav" aria-label="Hauptnavigation"><span>Figuren</span><span>Cloud-Speicher</span></nav>
+</div>
+<div class="dp-demo" aria-label="Gesten ausprobieren"><button class="dp-swipe-up cursor-interaction">↑ Hochwischen simulieren</button><button class="dp-swipe-down cursor-interaction">↓ Ausblenden</button></div>
+<output class="dp-state" aria-live="polite">Normalansicht · pausiert · 1× · Fit</output>
+</div>
+</section>
+<section data-variant="Lernpult" aria-label="Player mit Lernpult" hidden></section>
+<section data-variant="Schwebend" aria-label="Player mit schwebenden Bedienelementen" hidden></section>
+<script>
+(function(){
+ const root=document.getElementById('dance-player-demo');
+ const original=root.querySelector('[data-variant="Kompakt"] .dp-wrap');
+ root.querySelectorAll('section:empty').forEach(section=>section.append(original.cloneNode(true)));
+ root.querySelectorAll('section[data-variant]').forEach(section=>{
+  const q=s=>section.querySelector(s),phone=q('.dp-phone');
+  let playing=false,full=false,open=false,time=0,a=null,b=null,hideTimer;
+  if(section.dataset.variant==='Lernpult'){
+   q('.dp-a').textContent='A setzen';q('.dp-b').textContent='B setzen';
+   const tools=q('.dp-tools');tools.prepend(q('.dp-a'),q('.dp-b'),q('.dp-clear'));
+   tools.append(q('.dp-fit'),q('.dp-full'));q('.dp-full').style.gridColumn='span 2';
+  }
+  if(section.dataset.variant==='Schwebend'){
+   q('.dp-tools').before(q('.dp-ab'));q('.dp-full').textContent='Vollbild';
+  }
+  const stamp=n=>'0:'+String(Math.floor(n)).padStart(2,'0');
+  function draw(){
+   phone.classList.toggle('is-full',full);phone.classList.toggle('controls-open',open);
+   q('.dp-full').textContent=full?'Verkleinern':'Vollbild';q('.dp-now').textContent=stamp(time);q('.dp-progress').value=time;
+   q('.dp-play').innerHTML='<i data-lucide="'+(playing?'pause':'play')+'" aria-hidden="true"></i>';
+   q('.dp-play').setAttribute('aria-label',playing?'Pausieren':'Abspielen');
+   q('.dp-caption').textContent=playing?'Wiedergabe simuliert':'Erstes Videobild · pausiert';
+   q('.dp-film').setAttribute('aria-label',playing?'Simulierte Videowiedergabe':'Videobild, pausiert');
+   q('.dp-b').disabled=a===null;q('.dp-clear').disabled=a===null;
+   q('.dp-ab').textContent=a===null?'Kein A–B-Bereich':b===null?'A bei '+stamp(a)+' · B setzen':'A '+stamp(a)+' – B '+stamp(b);
+   q('.dp-state').textContent=(full?'Vollbild · '+(open?'Bedienung eingeblendet':'nur Video'):'Normalansicht')+' · '+(playing?'spielt':'pausiert')+' · '+q('.dp-speed').selectedOptions[0].text+' · '+q('.dp-fit').textContent;
+   if(globalThis.lucide)lucide.createIcons({attrs:{width:20,height:20}});
+  }
+  function reveal(){if(!full)return;open=true;draw();autoHide();}
+  function hide(){if(!full)return;open=false;clearTimeout(hideTimer);draw();}
+  function autoHide(){clearTimeout(hideTimer);if(full&&open&&playing)hideTimer=setTimeout(hide,4000);}
+  q('.dp-full').onclick=()=>{full=!full;open=false;draw();};
+  q('.dp-back').onclick=()=>{full=false;open=false;phone.classList.remove('is-landscape');draw();};
+  q('.dp-rotate').onclick=()=>{phone.classList.toggle('is-landscape');autoHide();};
+  q('.dp-play').onclick=()=>{playing=!playing;draw();autoHide();};
+  q('.dp-speed').onchange=()=>{draw();autoHide();};
+  q('.dp-progress').oninput=e=>{time=+e.target.value;draw();};
+  q('.dp-progress').onpointerdown=()=>clearTimeout(hideTimer);q('.dp-progress').onchange=autoHide;
+  q('.dp-rewind').onclick=()=>{time=Math.max(0,time-5);draw();autoHide();};
+  q('.dp-fit').onclick=()=>{phone.classList.toggle('is-crop');q('.dp-fit').textContent=phone.classList.contains('is-crop')?'Crop':'Fit';draw();autoHide();};
+  q('.dp-a').onclick=()=>{a=time;b=null;draw();autoHide();};
+  q('.dp-b').onclick=()=>{if(time>a)b=time;draw();autoHide();};
+  q('.dp-clear').onclick=()=>{a=null;b=null;draw();autoHide();};
+  q('.dp-swipe-up').onclick=reveal;q('.dp-swipe-down').onclick=hide;
+  let startY=null;
+  phone.addEventListener('pointerdown',e=>{if(e.target.closest('button,input,select'))return;startY=e.clientY;phone.setPointerCapture(e.pointerId);});
+  phone.addEventListener('pointerup',e=>{if(startY===null)return;const delta=e.clientY-startY;startY=null;if(delta< -35)reveal();if(delta>35)hide();});
+  phone.addEventListener('pointercancel',()=>startY=null);
+  setInterval(()=>{if(!playing||section.hidden)return;time+=.25*+q('.dp-speed').value;if(b!==null&&time>=b)time=a;if(time>=19){time=19;playing=false;}q('.dp-now').textContent=stamp(time);q('.dp-progress').value=time;const sway=Math.sin(time*2)*4;section.querySelector('.lead').style.transform='rotate('+sway+'deg)';section.querySelector('.partner').style.transform='scale(.94) rotate('+(-sway)+'deg)';if(!playing)draw();},250);
+  draw();
+ });
+})();
+</script>
+</div>
+<nav id="prototype-switcher" aria-label="Prototypvarianten"><button id="prev" aria-label="Vorherige Variante">←</button><span id="variant-name"></span><button id="next" aria-label="Nächste Variante">→</button></nav><script>(function(){const sections=[...document.querySelectorAll('section[data-variant]')],params=new URLSearchParams(location.search);let index=Math.max(0,sections.findIndex(s=>s.dataset.variant===params.get('variant')));function show(n){index=(n+sections.length)%sections.length;sections.forEach((s,i)=>s.hidden=i!==index);document.getElementById('variant-name').textContent=sections[index].dataset.variant+' · '+(index+1)+' / '+sections.length;const u=new URL(location.href);u.searchParams.set('variant',sections[index].dataset.variant);history.replaceState(null,'',u);}document.getElementById('prev').onclick=()=>show(index-1);document.getElementById('next').onclick=()=>show(index+1);document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textarea,[contenteditable]'))return;if(e.key==='ArrowLeft')show(index-1);if(e.key==='ArrowRight')show(index+1);});show(index);})();</script></html>
