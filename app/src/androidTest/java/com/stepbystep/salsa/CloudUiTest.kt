@@ -201,7 +201,9 @@ class CloudUiTest {
             await(scenario, "document.querySelector('#playerScreen').classList.contains('is-native-fullscreen')")
             assertEquals("true",js(scenario,"getComputedStyle(document.querySelector('#playerScreen .bottom-nav')).display==='none'"))
             js(scenario, "window.AndroidAppUI.back()")
-            await(scenario, "document.querySelector('#playerScreen').hidden && !document.querySelector('#playerScreen').classList.contains('is-native-fullscreen') && innerHeight>innerWidth")
+            await(scenario, "!document.querySelector('#playerScreen').hidden && !document.querySelector('#playerScreen').classList.contains('is-native-fullscreen')")
+            js(scenario, "window.AndroidAppUI.back()")
+            await(scenario, "document.querySelector('#playerScreen').hidden && innerHeight>innerWidth")
             js(scenario, "(async()=>{const s=await import(new URL('./storage.js',location.href).href);const f=(await s.listFigures()).find(f=>f.id===window.physicalPlayerId);if(f)await s.deleteFigure(f);window.physicalPlayerCleaned=true;})()")
             await(scenario, "!!window.physicalPlayerCleaned")
         }
