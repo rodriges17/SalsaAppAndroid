@@ -92,3 +92,10 @@ test('post-save refresh waits only for summaries and reports their failures befo
  const error=Error('summary unavailable'),f=setup(()=>Promise.reject(error));
  await assert.rejects(f.refresh({strict:true,summaries:true}),error);
 });
+
+test('overview renders catalog snapshots immediately and verifies videos only in the background',async()=>{
+ const calls=[];const h=setup(options=>{calls.push(options);return options.cached?[{id:'old',catalogPending:true}]:[{id:'updated'}];});
+ await h.refresh({cached:true});assert.equal(h.rendered[0][0].id,'old');assert.equal(h.rendered[0][0].storageChecking,undefined);
+ assert.equal(calls[0].catalogOnly,true);await h.deferred.shift()();assert.equal(calls[1].catalogOnly,undefined);
+ assert.equal(h.rendered.at(-1)[0].id,'updated');await h.refresh({cached:true});assert.equal(calls.length,2);
+});

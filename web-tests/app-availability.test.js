@@ -41,3 +41,10 @@ test('empty app inventory and zero-video figures cannot fabricate readable copie
  reset();catalog.figures=[];assert.deepEqual(await listFigures(),[]);
  catalog.figures=[{...figure,videoIds:[]}];assert.match((await listFigures())[0].storageProblem,/Videodatei fehlt/);
 });
+
+test('overview metadata reads need no media records or cache access',async()=>{
+ reset();const original=globalThis.caches;
+ globalThis.caches={open(){throw Error('catalog must not probe media');}};
+ try {catalog.videos=[];const result=await listFigures({metadataOnly:true});assert.equal(result[0].id,'figure');assert.equal(result[0].storageProblem,undefined);}
+ finally {globalThis.caches=original;}
+});

@@ -72,7 +72,7 @@ const overviewLoader = createOverviewLoader({
   failed: error => { $('empty').hidden = false; $('empty').replaceChildren(el('h2', '', 'Speicher nicht verfügbar'), el('p', '', storageMessage(error))); },
   defer: work => requestAnimationFrame(() => setTimeout(work, 0))
 });
-const refresh = options => overviewLoader.refresh(options);
+const refresh = options => overviewLoader.refresh({ summaries: true, ...options });
 const localCards = createLocalCardsView({ open: openPlayer, status: figure => cloudLocalIndex.status(figure), notify: toast });
 
 function renderOverview() {

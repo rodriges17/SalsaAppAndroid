@@ -2,6 +2,7 @@
 // refresh supersedes its predecessor. Lifecycle events reuse a pending check.
 export function createOverviewLoader({ list, render, failed, defer, now = Date.now, maxAge = 60_000, revision = () => 0 }) {
   let current, verified, verifiedAt, verifiedRevision;
+  const pendingCatalog = figures => figures.some(f => f.storageChecking || f.catalogPending);
 
   async function refresh({ cached = false, strict = false, summaries = false } = {}) {
     if (verified && verifiedRevision !== revision()) verified = undefined;
@@ -17,17 +18,17 @@ export function createOverviewLoader({ list, render, failed, defer, now = Date.n
     const signal = active.controller.signal;
     const apply = figures => {
       if (current !== active || signal.aborted) return;
-      if (!figures.some(f => f.storageChecking)) { verified = figures; verifiedAt = now(); verifiedRevision = active.revision; }
+      if (!pendingCatalog(figures)) { verified = figures; verifiedAt = now(); verifiedRevision = active.revision; }
       render(figures);
     };
     const report = error => { if (current === active && !signal.aborted) failed(error); };
     let deferred = false;
     try {
       const reuse = cached && !strict && verified;
-      const figures = reuse || await list({ cached: summaries || (cached && !strict), signal });
+      const figures = reuse || await list({ catalogOnly: summaries || (cached && !strict), cached: summaries || (cached && !strict), signal });
       if (strict) signal.throwIfAborted();
       if (reuse) render(figures); else apply(figures);
-      if ((summaries || (cached && !strict)) && (reuse || figures.some(f => f.storageChecking)) && !signal.aborted) {
+      if ((summaries || (cached && !strict)) && (reuse || pendingCatalog(figures)) && !signal.aborted) {
         deferred = true;
         defer(async () => {
           try {
