@@ -498,7 +498,7 @@ test('Android startup shows cached figures and refreshes the catalog and checks 
   await page.locator('#search').fill('App Figur');assert.equal(await page.locator('.figure-card').count(),2);
   await page.evaluate(()=>{window.holdLibraryReads=false;window.pendingLibraryReads.splice(0).forEach(resolve=>resolve());});
   await page.waitForFunction(id=>document.querySelector(`[data-figure-id="${id}"]`)?.textContent.includes('App Figur aktualisiert'),copy.id);
-  assert.ok(await page.evaluate(()=>fileCalls.some(c=>c.path.includes('/media/'))));
+  assert.ok(await page.evaluate(()=>fileCalls.some(c=>c.path?.includes('/media/'))));
   await page.waitForFunction(id=>document.querySelector(`[data-figure-id="${id}"]`)?.textContent.includes('Videodatei fehlt'),copy.id);
   assert.equal(await page.locator('#search').inputValue(),'App Figur');
   assert.doesNotMatch(await page.locator(`[data-figure-id="${copy.id}"]`).innerText(),/wird geprüft/);
