@@ -3,7 +3,7 @@
 export function createOverviewLoader({ list, render, failed, defer, now = Date.now, maxAge = 60_000, revision = () => 0 }) {
   let current, verified, verifiedAt, verifiedRevision, visibleKey;
   const displayKey = figures => JSON.stringify(figures.map(f => [f.id, f.storageFolder, f.revision, f.title, f.description, f.tags, f.status, f.duration, f.videoIds, f.folderName, f.storageProblem || '', !!f.folderAccessRequired]));
-  const pendingCatalog = figures => figures.some(f => f.storageChecking || f.catalogPending);
+  const pendingCatalog = figures => figures.catalogPending || figures.some(f => f.storageChecking || f.catalogPending);
 
   async function refresh({ cached = false, strict = false, summaries = false } = {}) {
     if (verified && verifiedRevision !== revision()) verified = undefined;

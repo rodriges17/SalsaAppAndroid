@@ -105,3 +105,9 @@ test('an unchanged background result does not redraw the list or disturb open me
  await h.refresh({cached:true});assert.equal(h.rendered.length,1);
  await h.deferred.shift()();assert.equal(h.rendered.length,1);
 });
+
+test('an empty remembered folder is still refreshed to discover externally added figures',async()=>{
+ const h=setup(options=>options.cached?Object.assign([],{catalogPending:true}):[{id:'external'}]);
+ await h.refresh({cached:true});assert.equal(h.rendered[0].length,0);
+ await h.deferred.shift()();assert.equal(h.rendered.at(-1)[0].id,'external');
+});

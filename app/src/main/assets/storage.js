@@ -122,6 +122,7 @@ export async function listFigures({ cached = false, catalogOnly = false, signal,
   for (const folder of await folders()) {
     await checkpoint();
     if (cached) {
+      if (catalogOnly) result.catalogPending = true; // Empty folders may acquire figures externally.
       result.push(...folder.library.figures.map(f => ({ ...hydrateFolder(f, folder.id), folderName: folder.name, ...(catalogOnly ? { catalogPending: true } : { storageChecking: true }) })));
       continue;
     }
