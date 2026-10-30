@@ -814,11 +814,11 @@ test('closing a checking editor prevents its delayed media from replacing a reop
    }return original(...args);
   };});
   await page.locator(`[data-figure-id="${copy.id}"] .card-options`).click();await page.getByRole('button',{name:'Bearbeiten',exact:true}).click();
-  await page.waitForFunction(()=>window.oldEditorReads.length===1);await page.locator('#editorBack').click();
+  await page.waitForFunction(()=>window.oldEditorReads.length>=1);assert.equal(await page.locator('#editorLoading').isVisible(),true);await page.locator('#editorBack').click();
   await page.waitForFunction(()=>!document.querySelector('#editor').open);
   await page.locator(`[data-figure-id="${f.id}"] .card-options`).click();await page.getByRole('button',{name:'Bearbeiten',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('#editorLoading').hidden);
-  await page.locator('#figureTitle').fill('Neuer Entwurf');await page.evaluate(()=>window.oldEditorReads[0]());
+  await page.locator('#figureTitle').fill('Neuer Entwurf');await page.evaluate(()=>window.oldEditorReads.splice(0).forEach(resolve=>resolve()));
   await page.waitForFunction(()=>window.oldReadReturned);
   assert.equal(await page.locator('#figureTitle').inputValue(),'Neuer Entwurf');
   assert.equal(await page.locator('#editorError').isVisible(),false);assert.equal(await page.locator('#saveFigure').isEnabled(),true);
