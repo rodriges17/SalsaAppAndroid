@@ -84,3 +84,11 @@ test('a mutation supersedes a pending cached check even when returning through r
  first.resolve([{id:'old'}]);await old;
  assert.equal(calls,2);assert.deepEqual(h.rendered,[[{id:'new'}]]);
 });
+
+test('post-save refresh waits only for summaries and reports their failures before deferring media checks',async()=>{
+ const h=setup(options=>options.cached?[{storageChecking:true}]:[{id:'checked'}]);
+ await h.refresh({strict:true,summaries:true});assert.equal(h.deferred.length,1);
+ assert.equal(h.rendered[0][0].storageChecking,true);await h.deferred.shift()();assert.equal(h.rendered.at(-1)[0].id,'checked');
+ const error=Error('summary unavailable'),f=setup(()=>Promise.reject(error));
+ await assert.rejects(f.refresh({strict:true,summaries:true}),error);
+});

@@ -14,7 +14,7 @@ import { initCloud, openCloud, closeCloud } from './cloud.js';
 import { importFigure } from './package.js';
 import { checksum } from './package.js';
 import { STATUSES, timeLabel, filterFigures, ABLoop } from './logic.js';
-import { localStorageRevision, listFigures, figureVideos, figureMedia, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, allowFolderAccess, setStorageFolder, transferFigure } from './storage.js';
+import { editFigureVideos, readFigureMetadata, saveFigureEdit, localStorageRevision, listFigures, figureVideos, figureMedia, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, allowFolderAccess, setStorageFolder, transferFigure } from './storage.js';
 
 const $ = id => document.getElementById(id);
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
@@ -206,7 +206,7 @@ function renderEditorState() {
   $('reviewAll').disabled = $('pickVideos').disabled;
   $('editorBack').disabled = editor.busy;
   $('saveProgress').hidden = !editor.busy; $('saveIndicator').hidden = !editor.busy;
-  $('saveProgress').textContent = editor.reloading ? 'Figur wird neu geladen …' : editor.saved ? 'Übersicht wird aktualisiert …' : 'Figur inkl. Video(s) werden gespeichert...';
+  $('saveProgress').textContent = editor.reloading ? 'Figur wird neu geladen …' : editor.saved ? 'Übersicht wird aktualisiert …' : editor.metadataOnly ? 'Figur wird gespeichert …' : 'Figur inkl. Video(s) werden gespeichert...';
   $('saveFigure').hidden = !!editor.saved;
   retryEditorRefresh.hidden = !editor.saved || !editor.refreshError;
   retryEditorRefresh.disabled = editor.busy;
@@ -218,19 +218,19 @@ function renderEditorState() {
 }
 async function openEditor(figure = null, imported = null) {
   if (opening || editor || learning) return; opening = true;
-  const active = createFigureEditSession({ figure, imported, readVideos: figureVideos,
-    readFigure: async (original, options) => (await listFigures(options)).find(f => f.id === original.id && (f.storageFolder ?? null) === (original.storageFolder ?? null)),
+  const active = createFigureEditSession({ figure, imported, readVideos: editFigureVideos,
+    readFigure: readFigureMetadata,
     commit: async (...args) => {
       await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
-      return saveFigure(...args);
+      return saveFigureEdit(...args);
     },
-    refresh: async () => { changed(); await refresh({ strict: true }); }
+    refresh: async () => { changed(); await refresh({ strict: true, summaries: true }); }
   });
   editor = active;
   try {
     showEditorForm(true); editorTags.setSuggestions(figures.flatMap(f => f.tags));
     $('editorHeading').textContent = figure ? 'Figur bearbeiten' : 'Figur hinzufügen'; setError('editorError', null);
-    $('editorLoading').textContent = 'Videos werden geladen und geprüft …';
+    $('editorLoading').textContent = 'Videoliste wird geladen …';
     renderDrafts(); renderEditorState(); $('editor').showModal(); pushRoute('editor');
     stopEditorTags?.(); stopEditorTags = connectTagSuggestions(editorTags, figures.flatMap(f => f.tags));
     opening = false;
@@ -239,7 +239,7 @@ async function openEditor(figure = null, imported = null) {
     await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
     if (editor !== active) return;
     const result = await active.load({ progress: ({ done, total }) => {
-      if (editor === active) $('editorLoading').textContent = `Videos werden geladen und geprüft … ${done} von ${total}`;
+      if (editor === active) $('editorLoading').textContent = `Videoliste wird geladen … ${done} von ${total}`;
     } });
     if (editor !== active) return;
     showEditorForm(); renderDrafts(); renderEditorState();
@@ -306,12 +306,21 @@ $('editorForm').addEventListener('submit', async event => {
 function cleanupEditor() { stopEditorTags?.(); stopEditorTags = null; editorTags.close(); editor?.leave(true); $('editor').close(); editor = null; fileSelection = null; $('videoFiles').value = ''; }
 
 const previewVideo = $('previewVideo');
-function openPreview(token) {
+async function openPreview(token) {
   if (!token) return;
   preview = { token, session: editor, ready: false };
   $('previewTitle').textContent = token.draft.name || 'Video'; setError('previewError', null); $('acceptVideo').disabled = true;
-  previewURL = URL.createObjectURL(token.draft.blob); previewVideo.src = previewURL; previewVideo.load();
+  const active = preview;
   $('preview').showModal(); pushRoute('preview');
+  try {
+    if (!token.draft.blob) {
+      setError('previewError', 'Video wird geladen …');
+      const loaded = await token.draft.load();
+      if (preview !== active || editor !== active.session) return;
+      Object.assign(token.draft, loaded); setError('previewError', null);
+    }
+    previewURL = URL.createObjectURL(token.draft.blob); previewVideo.src = previewURL; previewVideo.load();
+  } catch (error) { if (preview === active) setError('previewError', storageMessage(error)); }
 }
 previewVideo.addEventListener('loadeddata', () => {
   if (!preview) return;

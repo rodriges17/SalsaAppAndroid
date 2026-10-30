@@ -31,6 +31,7 @@ export function createFigureEditSession({ figure = null, imported = null, readVi
     get loadFailed() { return loadFailed; },
     get conflict() { return conflict; },
     get dirty() { return !saved && (JSON.stringify(data) !== initialForm || draftKey(drafts) !== initialDrafts); },
+    get metadataOnly() { return !!figure && draftKey(drafts) === initialDrafts; },
     get canSave() { return editable() && !conflict && !loading && !loadFailed && !preview && !!data.title.trim() && drafts.length > 0 && drafts.every(d => d.confirmed && !d.missing); },
     load({ progress = () => {} } = {}) {
       if (loadWork) return loadWork;
@@ -90,7 +91,7 @@ export function createFigureEditSession({ figure = null, imported = null, readVi
     remove(id) { if (mediaEditable() && drafts.length > 1) drafts = drafts.filter(d => d.id !== id); },
     startPreview(draft, replacing = null) {
       if (!replacing) draft = drafts.find(d => d.id === draft?.id);
-      if (!mediaEditable() || draft?.missing || !draft?.blob) return null;
+      if (!mediaEditable() || draft?.missing || (!draft?.blob && !draft?.load)) return null;
       preview = { draft: { ...draft }, replacing, accepted: false }; return preview;
     },
     startReplacement(file, id) {
@@ -128,8 +129,10 @@ export function createFigureEditSession({ figure = null, imported = null, readVi
       if (!session.canSave) return Promise.resolve({ kind: 'invalid' });
       saving = Promise.resolve().then(async () => {
         try {
-          validateDraft(data.title, drafts);
-          saved = await commit({ id, ...data, storageFolder: figure?.storageFolder, importFingerprint: fingerprint }, drafts, figure?.revision ?? null);
+          const metadataOnly = session.metadataOnly;
+          const materialized = drafts.filter(d => !(d.existing && d.load && !d.blob));
+          if (materialized.length) validateDraft(data.title, materialized);
+          saved = await commit({ id, ...data, storageFolder: figure?.storageFolder, importFingerprint: fingerprint }, drafts, figure?.revision ?? null, {metadataOnly});
           return await session.retryRefresh();
         } catch (error) { conflict = error.code === 'FIGURE_CONFLICT'; return { kind: 'failed', error }; }
       }).finally(() => { saving = null; });

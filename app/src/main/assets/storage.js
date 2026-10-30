@@ -2,7 +2,7 @@ import { cloudLocalIndex } from './cloud-local.js';
 import { createBackup, figureSignature, sourceKey } from './backup-format.js';
 import { checksum } from './package.js';
 import * as app from './app-storage.js';
-import { folderSupported, selectDirectory, permission, readLibrary, hydrateFolder, readFolderVideo, writeFolderFigure, deleteFolderFigure, restoreFolderBatch } from './folder-storage.js';
+import { folderSupported, selectDirectory, permission, readLibrary, hydrateFolder, readFolderVideo, writeFolderFigure, deleteFolderFigure, restoreFolderBatch, saveFolderMetadata } from './folder-storage.js';
 export { database, DB_NAME, MEDIA_CACHE, storageMessage, cleanupInterruptedImports } from './app-storage.js';
 export { folderSupported } from './folder-storage.js';
 const scope = new URL('./', import.meta.url).pathname;
@@ -310,4 +310,27 @@ export async function restoreBackupPlan(plan,choices,{signal,progress=()=>{}}={}
     const folder=await entries(plan.targetFolder);if(!folder||!folderSupported())throw new Error('Geräteordner nicht verfügbar.');
     return restoreFolderBatch(folder,items,plan.existing,mirror(folder),{signal,progress});
   });
+}
+
+// Read the selected figure and media descriptors without scanning other videos.
+export async function readFigureMetadata(original, {signal} = {}) {
+  signal?.throwIfAborted();
+  if (!original.storageFolder) return app.figureMetadata(original.id);
+  const folder = await folderFor(original);
+  await readRegisteredFolder(folder, signal);
+  const figure = folder.library.figures.find(f => f.id === original.id);
+  return figure ? {...hydrateFolder(figure, folder.id), folderName:folder.name} : undefined;
+}
+export async function editFigureVideos(figure, repair, {signal} = {}) {
+  return (await figureMedia(figure, {signal})).map(record => ({...record, existing:true, confirmed:true}));
+}
+export async function saveFigureEdit(figure, drafts, revision, {metadataOnly = false} = {}) {
+  if (metadataOnly) return locked(async () => {
+    if (!figure.storageFolder) return app.saveFigureMetadata(figure, revision);
+    const folder = await folderFor(figure);
+    return saveFolderMetadata(folder, figure, revision, mirror(folder));
+  });
+  const loaded = [];
+  for (const draft of drafts) loaded.push(draft.existing && !draft.blob ? {...draft, ...await draft.load(), name:draft.name, existing:true, confirmed:true} : draft);
+  return saveFigure(figure, loaded, revision);
 }
