@@ -33,7 +33,12 @@ const folders = async () => {
 };
 const folderSummary = folder => ({ id: folder.id, name: folder.name, figureCount: folder.library.figures.length, pendingCleanup: folder.library.garbage.length > 0 });
 const mirror = folder => async library => { folder.library = library; await put(folder); };
-const locked = work => navigator.locks ? navigator.locks.request(`salsa-storage:${scope}`, work) : work();
+let storageRevision = 0;
+export const localStorageRevision = () => storageRevision;
+const locked = work => {
+  const run = async () => { try { return await work(); } finally { storageRevision++; } };
+  return navigator.locks ? navigator.locks.request(`salsa-storage:${scope}`, run) : run();
+};
 export async function storageSettings() {
   const config = await entries('config') ?? { id: 'config', activeFolder: null }, supported = folderSupported();
   // A remembered folder is not proof of a current grant. Query only: opening

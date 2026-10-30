@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createOverviewLoader } from '../app/src/main/assets/overview-loader.js';
 const pending = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve=a; reject=b; }); return {promise,resolve,reject}; };
-function setup(list) {
+function setup(list, options = {}) {
  const rendered=[], errors=[], deferred=[];
- const loader=createOverviewLoader({list,render:x=>rendered.push(x),failed:x=>errors.push(x),defer:x=>deferred.push(x)});
+ const loader=createOverviewLoader({list,render:x=>rendered.push(x),failed:x=>errors.push(x),defer:x=>deferred.push(x), ...options});
  return {...loader,rendered,errors,deferred};
 }
 test('overview displays cached figures before a deferred folder check finishes', async()=>{
@@ -40,9 +40,26 @@ test('focus and visibility reuse both a pending first overview and its backgroun
  const done=h.deferred.shift()();h.resume();h.resume();assert.equal(calls,2,'in-flight validation was restarted');
  check.resolve([{id:'verified'}]);await done;assert.equal(h.rendered.at(-1)[0].id,'verified');
 });
-test('returning to an idle overview renders summaries before revalidating folders',async()=>{
- const calls=[];const h=setup(options=>{calls.push(options);return[{id:'app'}];});
- await h.refresh();await h.resume();assert.equal(calls.length,2);assert.equal(calls[1].cached,true);
+test('tab changes and resume reuse verified folder results without rescanning',async()=>{
+ const calls=[], verified=[{id:'folder',storageProblem:''}];
+ const h=setup(options=>{calls.push(options);return verified;});
+ await h.refresh();await h.refresh({cached:true});await h.resume();
+ assert.equal(calls.length,1);assert.deepEqual(h.rendered,[verified,verified,verified]);
+});
+test('expired results stay visible during one background check and mutations bypass cache',async()=>{
+ let clock=0; const check=pending(),calls=[],initial=[{id:'folder'}],fresh=[{id:'saved'}];
+ const h=setup(options=>{calls.push(options);return calls.length===1?initial:calls.length===2?check.promise:fresh;},{now:()=>clock});
+ await h.refresh();clock=60_000;await h.refresh({cached:true});
+ assert.equal(calls.length,1);assert.deepEqual(h.rendered.at(-1),initial);
+ const done=h.deferred.shift()();await h.refresh({cached:true});h.resume();assert.equal(calls.length,2);
+ await h.refresh();assert.equal(calls[1].signal.aborted,true);
+ check.resolve([{id:'stale'}]);await done;assert.deepEqual(h.rendered.at(-1),fresh);
+ await h.refresh({cached:true});assert.equal(calls.length,3);
+});
+test('completed background validation is reused on the next tab change',async()=>{
+ let calls=0;const h=setup(options=>{calls++;return options.cached?[{storageChecking:true}]:[{id:'checked'}];});
+ await h.refresh({cached:true});await h.deferred.shift()();
+ await h.refresh({cached:true});assert.equal(calls,2);assert.deepEqual(h.rendered.at(-1),[{id:'checked'}]);
 });
 
 test('explicit post-save refresh reports a failed or superseded overview to its caller',async()=>{
@@ -51,4 +68,19 @@ test('explicit post-save refresh reports a failed or superseded overview to its 
  const delayed=pending();let calls=0;const h=setup(()=>++calls===1?delayed.promise:[{id:'fresh'}]);
  const stale=h.refresh({strict:true});await h.refresh();delayed.resolve([{id:'stale'}]);
  await assert.rejects(stale,{name:'AbortError'});assert.equal(h.rendered.at(-1)[0].id,'fresh');
+});
+
+test('storage mutations outside the overview invalidate recent verified results',async()=>{
+ let version=0,calls=0;
+ const h=setup(()=>[{id:String(++calls)}],{revision:()=>version});
+ await h.refresh();await h.refresh({cached:true});assert.equal(calls,1);
+ version++;await h.resume();assert.equal(calls,2);assert.equal(h.rendered.at(-1)[0].id,'2');
+});
+
+test('a mutation supersedes a pending cached check even when returning through resume',async()=>{
+ let version=0,calls=0;const first=pending();
+ const h=setup(()=>++calls===1?first.promise:[{id:'new'}],{revision:()=>version});
+ const old=h.refresh({cached:true});version++;await h.resume();
+ first.resolve([{id:'old'}]);await old;
+ assert.equal(calls,2);assert.deepEqual(h.rendered,[[{id:'new'}]]);
 });
