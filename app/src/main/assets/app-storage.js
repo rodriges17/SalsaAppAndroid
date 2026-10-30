@@ -20,9 +20,9 @@ export function database() {
 function read(store, key) { return database().then(db => new Promise((resolve, reject) => { const tx = db.transaction(store); const request = key === undefined ? tx.objectStore(store).getAll() : tx.objectStore(store).get(key); let value; request.onsuccess = () => { value = request.result; }; tx.oncomplete = () => resolve(value); tx.onabort = () => reject(tx.error); tx.onerror = () => {}; })); }
 function writeImport(record) { return database().then(db => new Promise((resolve, reject) => { const tx = db.transaction('imports', 'readwrite'); tx.objectStore('imports').put(record); tx.oncomplete = resolve; tx.onabort = () => reject(tx.error); tx.onerror = () => {}; })); }
 const hydratePoster = record => record ? { ...record, poster: record.posterBytes ? new Blob([record.posterBytes], { type: 'image/jpeg' }) : null } : record;
-export async function listFigures() {
+export async function listFigures({ metadataOnly = false } = {}) {
   const figures = (await read('figures')).map(hydratePoster);
-  if (!figures.length) return figures;
+  if (metadataOnly || !figures.length) return figures;
   const records = new Map((await read('videos')).map(record => [record.id, record]));
   const cache = await caches.open(MEDIA_CACHE);
   return Promise.all(figures.map(async figure => {

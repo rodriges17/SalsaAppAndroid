@@ -1,7 +1,9 @@
 // Show persisted summaries before slow device-folder checks. Each explicit
 // refresh supersedes its predecessor. Lifecycle events reuse a pending check.
 export function createOverviewLoader({ list, render, failed, defer, now = Date.now, maxAge = 60_000, revision = () => 0 }) {
-  let current, verified, verifiedAt, verifiedRevision;
+  let current, verified, verifiedAt, verifiedRevision, visibleKey;
+  const displayKey = figures => JSON.stringify(figures.map(f => [f.id, f.storageFolder, f.revision, f.title, f.description, f.tags, f.status, f.duration, f.videoIds, f.folderName, f.storageProblem || '', !!f.folderAccessRequired]));
+  const pendingCatalog = figures => figures.catalogPending || figures.some(f => f.storageChecking || f.catalogPending);
 
   async function refresh({ cached = false, strict = false, summaries = false } = {}) {
     if (verified && verifiedRevision !== revision()) verified = undefined;
@@ -15,24 +17,26 @@ export function createOverviewLoader({ list, render, failed, defer, now = Date.n
     current?.controller.abort();
     const active = { controller: new AbortController(), pending: true, revision: revision() }; current = active;
     const signal = active.controller.signal;
-    const apply = figures => {
+    const apply = (figures, background = false) => {
       if (current !== active || signal.aborted) return;
-      if (!figures.some(f => f.storageChecking)) { verified = figures; verifiedAt = now(); verifiedRevision = active.revision; }
-      render(figures);
+      if (!pendingCatalog(figures)) { verified = figures; verifiedAt = now(); verifiedRevision = active.revision; }
+      const key = displayKey(figures);
+      if (!background || visibleKey !== key) render(figures);
+      visibleKey = key;
     };
     const report = error => { if (current === active && !signal.aborted) failed(error); };
     let deferred = false;
     try {
       const reuse = cached && !strict && verified;
-      const figures = reuse || await list({ cached: summaries || (cached && !strict), signal });
+      const figures = reuse || await list({ catalogOnly: summaries || (cached && !strict), cached: summaries || (cached && !strict), signal });
       if (strict) signal.throwIfAborted();
       if (reuse) render(figures); else apply(figures);
-      if ((summaries || (cached && !strict)) && (reuse || figures.some(f => f.storageChecking)) && !signal.aborted) {
+      if ((summaries || (cached && !strict)) && (reuse || pendingCatalog(figures)) && !signal.aborted) {
         deferred = true;
         defer(async () => {
           try {
             if (current !== active || signal.aborted) return;
-            apply(await list({ signal, yieldToUI: true }));
+            apply(await list({ signal, yieldToUI: true }), true);
           } catch (error) { report(error); }
           finally { active.pending = false; }
         });

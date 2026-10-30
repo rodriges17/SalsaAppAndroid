@@ -92,3 +92,22 @@ test('post-save refresh waits only for summaries and reports their failures befo
  const error=Error('summary unavailable'),f=setup(()=>Promise.reject(error));
  await assert.rejects(f.refresh({strict:true,summaries:true}),error);
 });
+
+test('overview renders catalog snapshots immediately and verifies videos only in the background',async()=>{
+ const calls=[];const h=setup(options=>{calls.push(options);return options.cached?[{id:'old',catalogPending:true}]:[{id:'updated'}];});
+ await h.refresh({cached:true});assert.equal(h.rendered[0][0].id,'old');assert.equal(h.rendered[0][0].storageChecking,undefined);
+ assert.equal(calls[0].catalogOnly,true);await h.deferred.shift()();assert.equal(calls[1].catalogOnly,undefined);
+ assert.equal(h.rendered.at(-1)[0].id,'updated');await h.refresh({cached:true});assert.equal(calls.length,2);
+});
+
+test('an unchanged background result does not redraw the list or disturb open menus',async()=>{
+ const h=setup(options=>options.cached?[{id:'same',catalogPending:true}]:[{id:'same',storageProblem:'',folderAccessRequired:false}]);
+ await h.refresh({cached:true});assert.equal(h.rendered.length,1);
+ await h.deferred.shift()();assert.equal(h.rendered.length,1);
+});
+
+test('an empty remembered folder is still refreshed to discover externally added figures',async()=>{
+ const h=setup(options=>options.cached?Object.assign([],{catalogPending:true}):[{id:'external'}]);
+ await h.refresh({cached:true});assert.equal(h.rendered[0].length,0);
+ await h.deferred.shift()();assert.equal(h.rendered.at(-1)[0].id,'external');
+});

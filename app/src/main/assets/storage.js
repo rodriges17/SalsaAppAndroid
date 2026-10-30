@@ -111,17 +111,19 @@ export async function backupFoldersNeedingAccess() {
   return missing;
 }
 // Cached summaries are for the first overview only, never proof of media access.
-export async function listFigures({ cached = false, signal, yieldToUI = false } = {}) {
+export async function listFigures({ cached = false, catalogOnly = false, signal, yieldToUI = false } = {}) {
   const checkpoint = async () => {
     signal?.throwIfAborted();
     if (yieldToUI) await new Promise(resolve => setTimeout(resolve, 0));
     signal?.throwIfAborted();
   };
-  const result = await app.listFigures();
+  const result = await app.listFigures({ metadataOnly: cached && catalogOnly });
+  if (cached && catalogOnly) for (const figure of result) figure.catalogPending = true;
   for (const folder of await folders()) {
     await checkpoint();
     if (cached) {
-      result.push(...folder.library.figures.map(f => ({ ...hydrateFolder(f, folder.id), folderName: folder.name, storageChecking: true })));
+      if (catalogOnly) result.catalogPending = true; // Empty folders may acquire figures externally.
+      result.push(...folder.library.figures.map(f => ({ ...hydrateFolder(f, folder.id), folderName: folder.name, ...(catalogOnly ? { catalogPending: true } : { storageChecking: true }) })));
       continue;
     }
     const { problem, accessRequired } = await folderAvailability(folder, signal);
@@ -129,7 +131,7 @@ export async function listFigures({ cached = false, signal, yieldToUI = false } 
     for (const f of folder.library.figures) {
       await checkpoint();
       let fileProblem = problem;
-      if (!fileProblem) try {
+      if (!catalogOnly && !fileProblem) try {
         const media = await folder.handle.getDirectoryHandle('media');
         for (const v of f.videos) {
           await checkpoint();

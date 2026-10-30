@@ -475,13 +475,17 @@ test('cloud figure marks locally stored selection and disables duplicate downloa
 });
 
 
-test('Android startup shows cached figures and stays interactive while folder checks are pending',async()=>{
+test('Android startup shows cached figures and refreshes the catalog and checks videos in the background',async()=>{
  const {page,context}=await setup();try{
   const app=await create(page,'App Figur');const folder=(await rpc(page,'folder',{action:'choose'})).activeFolder;
   const copy=await rpc(page,'transfer',{id:app.id,target:folder});
   await page.evaluate(()=>{
    const fs=JSON.parse(localStorage.getItem('mock-native-fs'));
    const media=Object.keys(fs.files).find(p=>p.includes('/media/'));delete fs.files[media];
+   const catalog=Object.keys(fs.files).find(p=>p.endsWith('library.json'));
+   const library=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(fs.files[catalog].data),c=>c.charCodeAt(0))));
+   library.figures[0].title='App Figur aktualisiert';
+   fs.files[catalog].data=btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(library))));
    localStorage.setItem('mock-native-fs',JSON.stringify(fs));localStorage.setItem('hold-startup-library','yes');
   });
   await page.reload();await page.waitForFunction(()=>window.nativeReady&&window.pendingLibraryReads.length>0);
@@ -489,10 +493,11 @@ test('Android startup shows cached figures and stays interactive while folder ch
   await page.waitForTimeout(100);
   assert.equal(await page.evaluate(()=>window.pendingLibraryReads.length),1,'Lifecycle events restarted the startup scan');
   assert.equal(await page.locator('.figure-card').count(),2);
-  assert.match(await page.locator(`[data-figure-id="${copy.id}"]`).innerText(),/wird geprüft/);
+  assert.doesNotMatch(await page.locator(`[data-figure-id="${copy.id}"]`).innerText(),/wird geprüft/);
   assert.equal(await page.evaluate(()=>fileCalls.filter(c=>c.op==='stat'&&c.path.includes('/media/')).length),0);
   await page.locator('#search').fill('App Figur');assert.equal(await page.locator('.figure-card').count(),2);
   await page.evaluate(()=>{window.holdLibraryReads=false;window.pendingLibraryReads.splice(0).forEach(resolve=>resolve());});
+  await page.waitForFunction(id=>document.querySelector(`[data-figure-id="${id}"]`)?.textContent.includes('App Figur aktualisiert'),copy.id);
   await page.waitForFunction(id=>document.querySelector(`[data-figure-id="${id}"]`)?.textContent.includes('Videodatei fehlt'),copy.id);
   assert.equal(await page.locator('#search').inputValue(),'App Figur');
   assert.doesNotMatch(await page.locator(`[data-figure-id="${copy.id}"]`).innerText(),/wird geprüft/);
@@ -518,6 +523,7 @@ test('Android Cloud navigation remains usable and shares a pending device-folder
   await page.evaluate(()=>localStorage.setItem('salsa-cloud-session:/:v1',JSON.stringify({access_token:'test',refresh_token:'refresh',expires_at:Date.now()+3600000})));
   await page.reload();await page.waitForFunction(()=>window.nativeReady);
   await page.waitForFunction(id=>{const card=document.querySelector(`[data-figure-id="${id}"]`);return card&&!card.textContent.includes('wird geprüft');},copy.id);
+  await page.waitForTimeout(100); // Let the lightweight startup catalog refresh settle.
   await page.evaluate(()=>{window.holdLibraryReads=true;});
   await page.locator('#cloudButton').click();await page.locator('.cloud-figures-heading').getByRole('heading',{name:'Meine Figuren',exact:true}).waitFor();
   await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();
