@@ -48,3 +48,6 @@ Der vorübergehende Entwurf einer neuen, bestehenden oder importierten lokalen F
 
 **Personenfreigabe**:
 Der gemeinsame Ablauf zum Anlegen und Bearbeiten einer Person mit Kontofreigabe, Speicherlimit und Bibliothekszuweisungen. Der Entwurf hält erfolgreiche und offene Speicherschritte getrennt; Wiederholen führt nur offene Schritte aus. Verwerfen entfernt ausschließlich ungespeicherte Änderungen. Kontowechsel und Sitzungsablauf entwerten den Ablauf, ohne bereits gespeicherte Rechte zurückzunehmen.
+
+**Figurenkarte**:
+Die Darstellung einer Figur mit Titel, Vorschau und kontextabhängigen Angaben und Aktionen. Cloud-Figurenkarten teilen einen Rahmen; lokale Figurenkarten behalten ihre eigene Darstellung. Gemeinsame Darstellungsregeln sind gebündelt. Geöffnete Cloud-Karten besitzen ihre Inhalts- und Vorschaulebensdauer unabhängig von Figuren-Downloads.

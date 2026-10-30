@@ -863,3 +863,12 @@ test('reopening from an old overview shows the current stored figure instead of 
   assert.equal(await page.locator('#figureTags').inputValue(),'');
  }finally{await context.close();}
 });
+
+import {runFigureCardsCase} from './figure-cards-case.js';
+test('shared cloud card geometry preserves contextual information in both themes',async()=>{
+ const {page,context}=await setup();try{await runFigureCardsCase(page,{root:'/',fixture:'/fixture.mp4'});}finally{await context.close();}
+});
+import {runCloudCardLifetimeCase} from './figure-cards-case.js';
+test('shared cloud preview lifetime handles late responses in own and library cards',async()=>{
+ const {page,context}=await setup();try{await runCloudCardLifetimeCase(page,{root:'/',fixture:'/fixture.mp4'});}finally{await context.close();}
+});
