@@ -166,3 +166,15 @@ export async function restoreFolderBatch(folder, items, expected, mirror, { sign
     validateLibrary(library);progress({phase:'commit'});await stage.commit(library,mirror);return items.length;
   } finally { await stage.discard(); }
 }
+
+// Only the catalog changes; video files and their verification remain untouched.
+export async function saveFolderMetadata(folder, figure, expectedRevision, mirror) {
+  if (!figure.title.trim()) throw new Error('Bitte einen Namen für die Figur eingeben.');
+  await permission(folder.handle);
+  const library = await readLibrary(folder.handle), old = library.figures.find(f => f.id === figure.id);
+  if (library.id !== folder.id || !old || old.revision !== expectedRevision) throw Object.assign(new Error('Diese Figur wurde inzwischen geändert. Bitte neu laden.'), {code:'FIGURE_CONFLICT'});
+  const saved = {...old, title:figure.title.trim(), description:figure.description, tags:figure.tags, status:figure.status, revision:crypto.randomUUID()};
+  library.figures[library.figures.indexOf(old)] = saved;
+  await writeLibrary(folder.handle, library); await mirror(library);
+  return hydrateFolder(saved, folder.id);
+}

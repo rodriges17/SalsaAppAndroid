@@ -198,3 +198,29 @@ export async function restoreAppBatch(items, expected, { signal, progress = () =
     await stage.commit(obsolete); return prepared.length;
   } finally { await stage.discard(); }
 }
+
+// Metadata-only edits retain media records and never open Cache Storage.
+export async function saveFigureMetadata(figure, expectedRevision) {
+  if (!figure.title.trim()) throw new Error('Bitte einen Namen für die Figur eingeben.');
+  const db = await database();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('figures', 'readwrite'), store = tx.objectStore('figures');
+    let saved, error;
+    const request = store.get(figure.id);
+    request.onsuccess = () => {
+      const old = request.result;
+      if (!old || old.revision !== expectedRevision) {
+        error = Object.assign(new Error('Diese Figur wurde inzwischen geändert. Bitte neu laden.'), {code:'FIGURE_CONFLICT'}); tx.abort(); return;
+      }
+      saved = {...old, title:figure.title.trim(), description:figure.description, tags:figure.tags, status:figure.status, revision:crypto.randomUUID()};
+      store.put(saved);
+    };
+    tx.oncomplete = () => resolve(hydratePoster(saved));
+    tx.onabort = () => reject(error ?? tx.error); tx.onerror = () => {};
+  });
+}
+
+export async function figureMetadata(id) {
+  const record = await read('figures', id);
+  return record ? hydratePoster(record) : undefined;
+}

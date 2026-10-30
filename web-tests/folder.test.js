@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateLibrary, readLibrary, writeFolderFigure, readFolderVideo, deleteFolderFigure, cleanupFolder, permission } from '../app/src/main/assets/folder-storage.js';
+import { validateLibrary, readLibrary, writeFolderFigure, readFolderVideo, deleteFolderFigure, cleanupFolder, permission, saveFolderMetadata } from '../app/src/main/assets/folder-storage.js';
 class Directory {
   files = new Map(); dirs = new Map(); failMedia = 0; failManifest = ''; deny = false; failDelete = false;
   async queryPermission() { return this.deny ? 'denied' : 'granted'; }
@@ -98,4 +98,16 @@ test('folder: editor verification cannot hide an external media change before sa
  const loaded=await readFolderVideo(folder,f,v);file.lastModified++;
  await assert.rejects(writeFolderFigure(folder,{...saved,status:'Sitzt'},[{...loaded,existing:true,confirmed:true}],saved.revision,mirror),/während der Bearbeitung verändert/);
  assert.equal(folder.library.figures[0].status,'Am Üben');assert.equal(media.files.get(v.file),file);
+});
+
+test('folder metadata edits never open media, preserve references, and reject conflicts or denied access',async()=>{
+ const {folder,mirror}=setup();const saved=await writeFolderFigure(folder,figure(),[draft()],null,mirror);
+ const before=structuredClone(folder.library.figures[0]);
+ folder.handle.getDirectoryHandle=async()=>{throw Error('metadata edits must not open media');};
+ const updated=await saveFolderMetadata(folder,{...saved,description:'Nur Text',tags:['Neu'],status:'Sitzt'},saved.revision,mirror);
+ assert.equal(updated.description,'Nur Text');assert.deepEqual(folder.library.figures[0].videos,before.videos);
+ assert.deepEqual(updated.videoContent,saved.videoContent);assert.equal(updated.createdAt,saved.createdAt);
+ await assert.rejects(saveFolderMetadata(folder,{...saved,title:'Veraltet'},saved.revision,mirror),e=>e.code==='FIGURE_CONFLICT');
+ folder.handle.deny=true;await assert.rejects(saveFolderMetadata(folder,updated,updated.revision,mirror),/Zugriff/);
+ assert.equal(folder.library.figures[0].description,'Nur Text');
 });

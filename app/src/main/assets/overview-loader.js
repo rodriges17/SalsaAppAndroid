@@ -3,7 +3,7 @@
 export function createOverviewLoader({ list, render, failed, defer, now = Date.now, maxAge = 60_000, revision = () => 0 }) {
   let current, verified, verifiedAt, verifiedRevision;
 
-  async function refresh({ cached = false, strict = false } = {}) {
+  async function refresh({ cached = false, strict = false, summaries = false } = {}) {
     if (verified && verifiedRevision !== revision()) verified = undefined;
     // Tab changes reuse verified results, including while a background check is
     // pending. Explicit mutation/repair refreshes always bypass this cache.
@@ -24,10 +24,10 @@ export function createOverviewLoader({ list, render, failed, defer, now = Date.n
     let deferred = false;
     try {
       const reuse = cached && !strict && verified;
-      const figures = reuse || await list({ cached: cached && !strict, signal });
+      const figures = reuse || await list({ cached: summaries || (cached && !strict), signal });
       if (strict) signal.throwIfAborted();
       if (reuse) render(figures); else apply(figures);
-      if (cached && !strict && (reuse || figures.some(f => f.storageChecking)) && !signal.aborted) {
+      if ((summaries || (cached && !strict)) && (reuse || figures.some(f => f.storageChecking)) && !signal.aborted) {
         deferred = true;
         defer(async () => {
           try {

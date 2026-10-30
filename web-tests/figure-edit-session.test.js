@@ -131,3 +131,19 @@ test('opening from an old overview reads the stored revision without losing edit
   assert.equal(s.data.title, 'Gespeicherter Stand'); assert.equal(s.data.description, 'Schon eingegeben');
   assert.deepEqual(s.data.tags, ['Neu']); assert.equal(readRevision, 'v4'); assert.equal(s.dirty, true);
 });
+
+test('lazy existing media permits metadata save without loading bytes and can be previewed on demand',async()=>{
+ let reads=0,options;
+ const lazy={id:'one',name:'Video',duration:1,load:async()=>{reads++;return video();}};
+ const s=createFigureEditSession({figure,...adapters,readVideos:async()=>[lazy],commit:async(f,d,r,o)=>{options=o;return {...f,revision:'v2'};}});
+ await s.load();assert.equal(s.canSave,true);assert.equal(s.drafts.length,1);assert.equal(reads,0);
+ const preview=s.startPreview(s.drafts[0]);assert.ok(preview);s.endPreview();
+ s.update({description:'Text ohne Video'});assert.equal((await s.save()).kind,'saved');
+ assert.equal(options.metadataOnly,true);assert.equal(reads,0);
+});
+test('changing lazy media order uses the full media commit path',async()=>{
+ let options;
+ const lazy=id=>({id,name:id,duration:1,load:async()=>video(id)});
+ const s=createFigureEditSession({figure,...adapters,readVideos:async()=>[lazy('one'),lazy('two')],commit:async(f,d,r,o)=>{options=o;return f;}});
+ await s.load();s.move('two',0);assert.equal((await s.save()).kind,'saved');assert.equal(options.metadataOnly,false);
+});
