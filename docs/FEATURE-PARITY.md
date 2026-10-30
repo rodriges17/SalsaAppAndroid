@@ -40,3 +40,7 @@ Abmelden, Kontowechsel und eine definitiv widerrufene Sitzung entfernen deren Ca
 Der identische Browservertrag prüft Wiederöffnen und Neustart ohne weiteren Listen-/Bildabruf, Offline-Anzeige, gedrosselte und zusammengeführte Hintergrundabrufe, Fehlerwiederholung, Abmeldung mit Löschung von Daten/Bildern, verspätete Kontoantworten sowie Token-Erneuerung in einem zweiten Tab ohne Entwurfsverlust.
 
 Bereits erzeugte Ersatz-Vorschaubilder bleiben wiederverwendbar, auch wenn die Cloud noch kein Bild bereitstellt. Eine erneute Bildprüfung darf deshalb nicht erneut das Quellvideo für dieselbe Version laden.
+
+## Gemeinsame Figurenkarten
+
+Beide Apps verwenden identischen gemeinsamen Kartencode. Cloud-Kontexte teilen ihre Gestaltung; die lokale Darstellung bleibt eigenständig. Der gemeinsame Browservertrag und die vorhandenen lokalen Layoutprüfungen sichern diese Unterschiede. Siehe [Figurenkarten](FIGURENKARTEN.md).

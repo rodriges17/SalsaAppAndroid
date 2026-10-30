@@ -1,4 +1,4 @@
-// Shared UI reviewed for Pur Cloud UI against SalsaAppCloud (base f49a60a).
+// Shared layout baseline; Cloud card styling validated by the shared visible contract.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -8,7 +8,7 @@ test('Android uses the original SalsaAppCloud layout and stylesheet', async () =
  const root = new URL('../app/src/main/assets/', import.meta.url);
  const html = await readFile(new URL('index.html', root), 'utf8');
  assert.equal(hash(html.slice(html.indexOf('<body>'))), 'a0b4b0a17d17b4cbe2d508d5942c536f85c5d04128f33c64e40f27389954897d');
- assert.equal(hash(await readFile(new URL('styles.css', root))), '00b2f4f1cd7f6525e46f0ee387df54c425a7f9ab476658cbbb2fbee461022aa6');
+ assert.equal(hash(await readFile(new URL('styles.css', root))), 'd93aa9f82b5bfcd9fdf121e6636f5531fccaf5d78489f815e91513d62b8350cc');
  const manifest = await readFile(new URL('../app/src/main/AndroidManifest.xml', import.meta.url), 'utf8');
  assert.match(manifest, /name=".CloudUiActivity" android:exported="true"/);
 });
