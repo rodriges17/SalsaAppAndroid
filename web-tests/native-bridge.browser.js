@@ -519,11 +519,11 @@ test('Android Cloud navigation remains usable and shares a pending device-folder
   await page.reload();await page.waitForFunction(()=>window.nativeReady);
   await page.waitForFunction(id=>{const card=document.querySelector(`[data-figure-id="${id}"]`);return card&&!card.textContent.includes('wird geprüft');},copy.id);
   await page.evaluate(()=>{window.holdLibraryReads=true;});
-  await page.locator('#cloudButton').click();await page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true}).waitFor();
+  await page.locator('#cloudButton').click();await page.locator('.cloud-figures-heading').getByRole('heading',{name:'Meine Figuren',exact:true}).waitFor();
   await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();
   await page.locator('a.cloud-library-card').click();await page.getByRole('heading',{name:'Schneller Kurs',exact:true}).waitFor();
   await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).click();
-  await page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true}).waitFor();
+  await page.locator('.cloud-figures-heading').getByRole('heading',{name:'Meine Figuren',exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>window.pendingLibraryReads.length),1,'Tab and library navigation must share one pending native folder read');
   await page.evaluate(()=>{
    const call=AndroidFiles.call.bind(AndroidFiles);
